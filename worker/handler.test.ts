@@ -175,4 +175,17 @@ describe("storage paths", () => {
     expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/none.png"), env)).status).toBe(404);
     expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/%2E%2E/x.png"), env)).status).toBe(404);
   });
+
+  test("svg request serves a real svg when stored, else the raster original", async () => {
+    const { env } = setup({ "coin-logos/eth.svg": "<svg/>", "coin-logos/4444.jpg": "jpg" });
+    const handle = createHandler(coins, exchanges);
+    const real = await handle(new Request("https://logos.marketmaker.cc/coin-logos/eth.svg"), env);
+    expect(real.headers.get("Content-Type")).toBe("image/svg+xml");
+    expect(await real.text()).toBe("<svg/>");
+    const raster = await handle(new Request("https://logos.marketmaker.cc/coin-logos/4444.svg"), env);
+    expect(raster.status).toBe(200);
+    expect(raster.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(await raster.text()).toBe("jpg");
+    expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/nope.svg"), env)).status).toBe(404);
+  });
 });

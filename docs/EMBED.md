@@ -13,6 +13,7 @@ Base: `https://logos.marketmaker.cc`
 
 - The coin file name is the lowercase ticker. Tickers with special characters are URL-encoded (`$TRUMP`, CJK symbols).
 - The extension of an original differs per file (`.png`, `.jpg`, `.webp`, `.svg`). Read the exact `file` from `data/coins.json` or `data/exchanges.json` in this repository, or copy it from the panel on logos.marketmaker.cc. Thumbnails are always `.webp`.
+- `.svg` works for every logo: `/coin-logos/btc.svg` returns a real vector when we have one (283 coins, source spothq/cryptocurrency-icons, CC0, list in `data/svg.json`). For all other logos, the same `.svg` URL returns the raster original with its real `Content-Type` (`image/png`, `image/jpeg`). Browsers show both in `<img>`. Add vectors with `bun scripts/sync-svg.ts`.
 - To see how the listing project builds these URLs, read `~/projects/trading/listing`.
 
 **HTML**

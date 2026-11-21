@@ -23,6 +23,8 @@ function storeUrl(icon: Icon, small: boolean): string {
   return `${STORE}/${icon.kind}-logos/${small ? 'sm/' : ''}${encodeURIComponent(small ? icon.sm : icon.file)}`;
 }
 
+const svgKey = (icon: Icon) => (icon.kind === 'coin' ? fileStem(icon.file).toLowerCase() : '');
+
 /** Same-origin download route (the storage domain sends no CORS headers, so blobs come through our Worker). */
 function downloadRoute(icon: Icon, small: boolean): string {
   return `/${icon.kind}/${encodeURIComponent(key(icon))}?size=${small ? 'sm' : 'full'}`;
@@ -77,6 +79,7 @@ const ICON_CLOSE = 'M6 6l12 12M18 6 6 18';
 function App() {
   const [coins, setCoins] = createSignal<Coin[]>([]);
   const [exchanges, setExchanges] = createSignal<Exchange[]>([]);
+  const [svgStems, setSvgStems] = createSignal<Set<string>>(new Set());
   const [loaded, setLoaded] = createSignal(false);
   const [loadError, setLoadError] = createSignal('');
   const [tab, setTab] = createSignal<'coins' | 'exchanges'>('coins');
@@ -174,6 +177,8 @@ function App() {
       }
     }
 
+    fetch('/index/svg.json').then((r) => (r.ok ? r.json() : [])).then((list: string[]) => setSvgStems(new Set(list))).catch(() => undefined);
+
     Promise.all([
       fetch('/index/coins.json').then((response) => {
         if (!response.ok) throw new Error(`Coin index returned ${response.status}`);
@@ -228,15 +233,15 @@ function App() {
     }
   }
 
-  async function download(icon: Icon, small: boolean) {
-    setBusy(small ? 'webp' : 'original');
+  async function download(icon: Icon, small: boolean, vector = false) {
+    setBusy(vector ? 'svg' : small ? 'webp' : 'original');
     try {
-      const response = await fetch(downloadRoute(icon, small));
+      const response = await fetch(vector ? `/coin-logos/${encodeURIComponent(svgKey(icon))}.svg` : downloadRoute(icon, small));
       if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
       const generated = response.headers.get('x-icons-fallback') === '1';
       const source = await response.blob();
-      const blob = small ? await asWebp96(source) : source;
-      const filename = small ? icon.sm : generated ? `${fileStem(icon.file)}.svg` : icon.file;
+      const blob = small && !vector ? await asWebp96(source) : source;
+      const filename = vector ? `${svgKey(icon)}.svg` : small ? icon.sm : generated ? `${fileStem(icon.file)}.svg` : icon.file;
       const link = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       link.href = objectUrl;
@@ -360,6 +365,9 @@ function App() {
                   <div class="insp-actions">
                     <button class="btn btn--primary" type="button" disabled={busy() !== null} onClick={() => void download(icon(), false)}><Svg d={ICON_DOWN} />Original</button>
                     <button class="btn btn--ghost" type="button" disabled={busy() !== null} onClick={() => void download(icon(), true)}><Svg d={ICON_DOWN} />WebP 96px</button>
+                    <Show when={svgStems().has(svgKey(icon()))}>
+                      <button class="btn btn--ghost" type="button" disabled={busy() !== null} onClick={() => void download(icon(), false, true)}><Svg d={ICON_DOWN} />SVG vector</button>
+                    </Show>
                   </div>
 
                   <div class="snip">
@@ -373,6 +381,7 @@ function App() {
                       <button class="btn btn--ghost btn--sm" type="button" onClick={() => void copy(snippet(icon(), snippetKind()), 'Snippet')}><Svg d={ICON_COPY} />Copy</button>
                     </div>
                     <p class="thumb mono">96px WebP: <span>{storeUrl(icon(), true)}</span></p>
+                    <Show when={svgStems().has(svgKey(icon()))}><p class="thumb mono">Vector: <span>{`${STORE}/coin-logos/${svgKey(icon())}.svg`}</span></p></Show>
                   </div>
                   <p class="insp-status" role="status" aria-live="polite">{feedback()}</p>
                 </>

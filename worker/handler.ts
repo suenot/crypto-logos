@@ -110,6 +110,8 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
     setBest(bySymbol, coin.symbol.toLowerCase(), coin);
     if (coin.slug) setBest(bySlug, coin.slug.toLowerCase(), coin);
   }
+  const byStem = new Map<string, Coin>();
+  for (const coin of coins) if (!byStem.has(coin.stem.toLowerCase())) byStem.set(coin.stem.toLowerCase(), coin);
   const byExchange = new Map(exchanges.map((exchange) => [exchange.slug.toLowerCase(), exchange]));
 
   return async function handle(request: Request, env: Environment): Promise<Response> {
@@ -127,12 +129,27 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
       if (objectKey.split("/").some((part) => part === "" || part === "." || part === "..") || /[\\\u0000-\u001f]/.test(objectKey)) {
         return jsonError(404, "Not found");
       }
-      const object = await env.LOGOS.get(objectKey);
+      let servedKey = objectKey;
+      let object = await env.LOGOS.get(objectKey);
+      if (!object && objectKey.endsWith(".svg")) {
+        // No vector for this logo: serve the raster original instead (real Content-Type, never a fake SVG).
+        const parts = objectKey.slice(0, -4).split("/");
+        const stem = parts.pop()!.toLowerCase();
+        const folder = parts.join("/");
+        const raster =
+          folder === "coin-logos" ? byStem.get(stem)?.file
+          : folder === "exchange-logos" ? byExchange.get(stem)?.file
+          : undefined;
+        if (raster) {
+          servedKey = `${folder}/${raster}`;
+          object = await env.LOGOS.get(servedKey);
+        }
+      }
       if (!object) return jsonError(404, "Not found");
       const headers = new Headers({
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": aliasCache,
-        "Content-Type": object.httpMetadata?.contentType ?? contentType(objectKey),
+        "Content-Type": object.httpMetadata?.contentType ?? contentType(servedKey),
         "Vary": "Accept-Encoding",
       });
       if (object.size !== undefined) headers.set("Content-Length", String(object.size));

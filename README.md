@@ -33,7 +33,7 @@ The files live in the Cloudflare R2 bucket `listingapis-logos`. `https://logos.m
 | Exchange original | `https://logos.marketmaker.cc/exchange-logos/<file>` |
 | Exchange thumbnail, 96px WebP | `https://logos.marketmaker.cc/exchange-logos/sm/<slug>.webp` |
 
-The extension of an original varies, so take the exact file name from `data/coins.json` and `data/exchanges.json` (or from the icon panel on the site).
+`<ticker>.svg` returns a real SVG when one exists (283 coins), otherwise the raster original. The extension of an original varies, so take the exact file name from `data/coins.json` and `data/exchanges.json` (or from the icon panel on the site).
 
 ```html
 <img src="https://logos.marketmaker.cc/coin-logos/btc.png" alt="Bitcoin" width="48" height="48">
