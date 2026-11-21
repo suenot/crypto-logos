@@ -15,8 +15,7 @@ async function readIndex<T>(kind: 'coins' | 'exchanges'): Promise<T[]> {
   return JSON.parse(await readFile(path.join(dataDirectory, `${kind}.json`), 'utf8'));
 }
 
-async function compactIndex(kind: 'coins' | 'exchanges' | 'svg'): Promise<string> {
-  if (kind === 'svg') return readFile(path.join(dataDirectory, 'svg.json'), 'utf8').catch(() => '[]');
+async function compactIndex(kind: 'coins' | 'exchanges'): Promise<string> {
   const rows = kind === 'coins'
     ? (await readIndex<Coin>('coins')).map(({ symbol, file, name }): CoinRow => name ? [symbol, file, name] : [symbol, file])
     : (await readIndex<Exchange>('exchanges')).map(({ slug, name, file, sm }): ExchangeRow => [slug, name, file, sm]);
@@ -27,7 +26,7 @@ type Next = (error?: unknown) => void;
 
 async function serveIndex(request: IncomingMessage, response: ServerResponse, next: Next) {
   const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
-  const match = /^\/index\/(coins|exchanges|svg)\.json$/.exec(pathname);
+  const match = /^\/index\/(coins|exchanges)\.json$/.exec(pathname);
   if (!match || request.method !== 'GET') {
     next();
     return;
@@ -35,7 +34,7 @@ async function serveIndex(request: IncomingMessage, response: ServerResponse, ne
   try {
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
     response.setHeader('Access-Control-Allow-Origin', '*');
-    response.end(await compactIndex(match[1] as 'coins' | 'exchanges' | 'svg'));
+    response.end(await compactIndex(match[1] as 'coins' | 'exchanges'));
   } catch (error) {
     next(error);
   }
@@ -61,7 +60,7 @@ async function createIconMiddleware() {
   };
   return async (request: IncomingMessage, response: ServerResponse, next: Next) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
-    if (!/^\/(coin|exchange)(-logos)?\//.test(url.pathname)) {
+    if (!/^\/(coin|exchange)\//.test(url.pathname)) {
       next();
       return;
     }
@@ -80,7 +79,7 @@ function iconData(): Plugin {
   return {
     name: 'icon-data',
     async generateBundle() {
-      for (const kind of ['coins', 'exchanges', 'svg'] as const) {
+      for (const kind of ['coins', 'exchanges'] as const) {
         this.emitFile({ type: 'asset', fileName: `index/${kind}.json`, source: await compactIndex(kind) });
       }
     },
