@@ -116,6 +116,30 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
     if (request.method !== "GET") return jsonError(405, "Method not allowed");
 
     const url = new URL(request.url);
+    // Storage paths, identical to the R2 keys: /coin-logos/btc.png, /exchange-logos/sm/binance.webp
+    if (/^\/(coin|exchange)-logos\//.test(url.pathname)) {
+      let objectKey: string;
+      try {
+        objectKey = decodeURIComponent(url.pathname.slice(1));
+      } catch {
+        return jsonError(400, "Invalid path");
+      }
+      if (objectKey.split("/").some((part) => part === "" || part === "." || part === "..") || /[\\\u0000-\u001f]/.test(objectKey)) {
+        return jsonError(404, "Not found");
+      }
+      const object = await env.LOGOS.get(objectKey);
+      if (!object) return jsonError(404, "Not found");
+      const headers = new Headers({
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": aliasCache,
+        "Content-Type": object.httpMetadata?.contentType ?? contentType(objectKey),
+        "Vary": "Accept-Encoding",
+      });
+      if (object.size !== undefined) headers.set("Content-Length", String(object.size));
+      if (object.httpEtag) headers.set("ETag", object.httpEtag);
+      return new Response(object.body, { headers });
+    }
+
     const coinMatch = /^\/coin\/([^/]+)$/.exec(url.pathname);
     const exchangeMatch = /^\/exchange\/([^/]+)$/.exec(url.pathname);
     if (!coinMatch && !exchangeMatch) {

@@ -1,6 +1,6 @@
-# Crypto Icons
+# Crypto Logos
 
-A searchable collection of trading logos for coins and exchanges. The gallery and downloads live at [icons.marketmaker.cc](https://icons.marketmaker.cc); the images are served from Cloudflare R2 storage (`logos.listingapis.com`).
+A searchable collection of trading logos for coins and exchanges. The gallery and downloads live at [logos.marketmaker.cc](https://logos.marketmaker.cc), which also serves the images from Cloudflare R2 storage. The old `icons.marketmaker.cc` and `logos.listingapis.com` keep working.
 
 ## Get started
 
@@ -24,22 +24,22 @@ Every ticker with an image appears in the catalog. Full syncs refresh the [CoinM
 
 ## Embed an icon
 
-The icons already live in the Cloudflare R2 bucket `listingapis-logos`, public at `https://logos.listingapis.com`. The listing project loads them from there, and every other project reuses the same paths:
+The files live in the Cloudflare R2 bucket `listingapis-logos`. `https://logos.marketmaker.cc` serves them under the exact storage paths (the same keys the listing project uses via `logos.listingapis.com`). Every project uses these paths:
 
 | What | URL |
 | --- | --- |
-| Coin original | `https://logos.listingapis.com/coin-logos/<lowercase-ticker>.<ext>` |
-| Coin thumbnail, 96px WebP | `https://logos.listingapis.com/coin-logos/sm/<lowercase-ticker>.webp` |
-| Exchange original | `https://logos.listingapis.com/exchange-logos/<file>` |
-| Exchange thumbnail, 96px WebP | `https://logos.listingapis.com/exchange-logos/sm/<slug>.webp` |
+| Coin original | `https://logos.marketmaker.cc/coin-logos/<lowercase-ticker>.<ext>` |
+| Coin thumbnail, 96px WebP | `https://logos.marketmaker.cc/coin-logos/sm/<lowercase-ticker>.webp` |
+| Exchange original | `https://logos.marketmaker.cc/exchange-logos/<file>` |
+| Exchange thumbnail, 96px WebP | `https://logos.marketmaker.cc/exchange-logos/sm/<slug>.webp` |
 
 The extension of an original varies, so take the exact file name from `data/coins.json` and `data/exchanges.json` (or from the icon panel on the site).
 
 ```html
-<img src="https://logos.listingapis.com/coin-logos/btc.png" alt="Bitcoin" width="48" height="48">
+<img src="https://logos.marketmaker.cc/coin-logos/btc.png" alt="Bitcoin" width="48" height="48">
 ```
 
-icons.marketmaker.cc is where you browse, search and download. Do not copy icons into other repositories. See the [embedding guide](docs/EMBED.md) and [logo notice](LICENSE-NOTICE.md).
+logos.marketmaker.cc is also where you browse, search and download. Do not copy icons into other repositories. See the [embedding guide](docs/EMBED.md) and [logo notice](LICENSE-NOTICE.md).
 
 ## Deploy
 
@@ -49,4 +49,4 @@ Build the site and run the tests and typecheck first. Set `CLOUDFLARE_API_TOKEN`
 bun x wrangler@latest deploy
 ```
 
-Wrangler configures the `icons-marketmaker-cc` Worker, the `LOGOS` R2 binding, the static site and the `icons.marketmaker.cc` custom domain. After deployment, check `/`, `/index/coins.json`, and `/coin/BTC?size=full`.
+Wrangler configures the `icons-marketmaker-cc` Worker, the `LOGOS` R2 binding, the static site and the `logos.marketmaker.cc` and `icons.marketmaker.cc` custom domains. After deployment, check `/`, `/index/coins.json`, and `/coin-logos/btc.png`.

@@ -3,7 +3,10 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-21",
   "workers_dev": true,
-  "routes": [{ "pattern": "icons.marketmaker.cc", "custom_domain": true }],
+  "routes": [
+    { "pattern": "logos.marketmaker.cc", "custom_domain": true },
+    { "pattern": "icons.marketmaker.cc", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./site/dist",
     "binding": "ASSETS",

@@ -2,10 +2,10 @@ import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show }
 import { fileStem, type CoinRow, type ExchangeRow, type Logo } from '../../data/catalog';
 import logoSvg from './logo.svg?raw';
 
-const REPO_URL = 'https://github.com/suenot/crypto-icons';
-const ZIP_URL = 'https://github.com/suenot/crypto-icons/archive/refs/heads/main.zip';
+const REPO_URL = 'https://github.com/suenot/crypto-logos';
+const ZIP_URL = 'https://github.com/suenot/crypto-logos/archive/refs/heads/main.zip';
 // Canonical storage. Every project embeds icons from these exact paths (the same ones the listing project uses).
-const STORE = 'https://logos.listingapis.com';
+const STORE = 'https://logos.marketmaker.cc';
 const ROW_HEIGHT = 112;
 const GAP = 8;
 
@@ -262,7 +262,7 @@ function App() {
         <div class="wrap">
           <a class="brand" href="#top" aria-label="Icons home">
             <span class="brand-logo" innerHTML={logoSvg} />
-            <span>icons<i>.marketmaker.cc</i></span>
+            <span>logos<i>.marketmaker.cc</i></span>
           </a>
           <nav class="nav-links" aria-label="Primary">
             <a href="#browse">Browse</a>
@@ -285,7 +285,7 @@ function App() {
           <h1 id="hero-title" class="sr">Coin and exchange icons for trading</h1>
           <div class="hero-grid">
             <div class="hero-text">
-              <p class="host mono" aria-hidden="true">logos.listingapis.com</p>
+              <p class="host mono" aria-hidden="true">logos.marketmaker.cc</p>
               <p class="path mono" aria-hidden="true"><span class="path-fixed">{heroName()}</span><span class="path-slot">{heroText()}</span><span class="caret" /></p>
               <p class="lede">Every coin and exchange logo we use, in one place. Free to embed from Cloudflare, no keys, no sign-up.</p>
               <div class="cta">
@@ -387,10 +387,10 @@ function App() {
             <p>The files already live in our Cloudflare R2 bucket and the listing project loads them from there. Other projects reuse the same URLs, so there is one copy to maintain. Do not copy icons into another repository.</p>
           </div>
           <ul class="paths">
-            <li><code class="mono">logos.listingapis.com/coin-logos/<b>btc.png</b></code><p>Coin original. The file name is the lowercase ticker and the extension is the stored one, so take it from the icon panel.</p></li>
-            <li><code class="mono">logos.listingapis.com/coin-logos/sm/<b>btc.webp</b></code><p>Coin thumbnail, 96px WebP. Use it for lists and tables.</p></li>
-            <li><code class="mono">logos.listingapis.com/exchange-logos/<b>binance.png</b></code><p>Exchange original, named by slug.</p></li>
-            <li><code class="mono">logos.listingapis.com/exchange-logos/sm/<b>binance.webp</b></code><p>Exchange thumbnail, 96px WebP.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/coin-logos/<b>btc.png</b></code><p>Coin original. The file name is the lowercase ticker and the extension is the stored one, so take it from the icon panel.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/coin-logos/sm/<b>btc.webp</b></code><p>Coin thumbnail, 96px WebP. Use it for lists and tables.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/exchange-logos/<b>binance.png</b></code><p>Exchange original, named by slug.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/exchange-logos/sm/<b>binance.webp</b></code><p>Exchange thumbnail, 96px WebP.</p></li>
           </ul>
         </section>
       </main>

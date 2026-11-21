@@ -154,3 +154,25 @@ describe("icon routes", () => {
     expect(invalidExtension.status).toBe(404);
   });
 });
+
+describe("storage paths", () => {
+  test("serves R2 keys under the same path", async () => {
+    const { env } = setup({ "coin-logos/btc.png": "png", "exchange-logos/sm/binance.webp": "webp" });
+    const handle = createHandler(coins, exchanges);
+    const coin = await handle(new Request("https://logos.marketmaker.cc/coin-logos/btc.png"), env);
+    expect(coin.status).toBe(200);
+    expect(await coin.text()).toBe("png");
+    expect(coin.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(coin.headers.get("Content-Type")).toBe("image/png");
+    const exchange = await handle(new Request("https://logos.marketmaker.cc/exchange-logos/sm/binance.webp"), env);
+    expect(exchange.status).toBe(200);
+    expect(exchange.headers.get("Content-Type")).toBe("image/webp");
+  });
+
+  test("404 for missing keys and traversal", async () => {
+    const { env } = setup({});
+    const handle = createHandler(coins, exchanges);
+    expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/none.png"), env)).status).toBe(404);
+    expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/%2E%2E/x.png"), env)).status).toBe(404);
+  });
+});
