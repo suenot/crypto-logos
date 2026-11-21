@@ -1,0 +1,13 @@
+{
+  "name": "icons-marketmaker-cc",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-21",
+  "workers_dev": false,
+  "routes": [{ "pattern": "icons.marketmaker.cc", "custom_domain": true }],
+  "assets": {
+    "directory": "./site/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  "r2_buckets": [{ "binding": "LOGOS", "bucket_name": "listingapis-logos" }]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "crypto-icons",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "sync": "bun --no-env-file scripts/sync.ts",
+    "dev": "vite --config site/vite.config.ts",
+    "build": "vite build --config site/vite.config.ts",
+    "preview": "vite preview --config site/vite.config.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "solid-js": "1.9.19"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "@types/node": "22.20.1",
+    "typescript": "5.9.3",
+    "vite": "6.4.6",
+    "vite-plugin-solid": "2.11.16"
+  }
+}
