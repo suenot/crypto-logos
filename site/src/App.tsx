@@ -1,22 +1,28 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
-import { fileStem, type CoinRow, type ExchangeRow, type Logo } from '../../data/catalog';
+import { fileStem, type AiRow, type CoinRow, type ExchangeRow, type Logo } from '../../data/catalog';
 import logoSvg from './logo.svg?raw';
 
 const REPO_URL = 'https://github.com/suenot/crypto-logos';
 const ZIP_URL = 'https://github.com/suenot/crypto-logos/archive/refs/heads/main.zip';
 // Canonical storage. Every project embeds icons from these exact paths (the same ones the listing project uses).
-const STORE = 'https://logos.marketmaker.cc';
+// The dev server serves ai-logos from the local icons/ folder, so dev uses same-origin paths.
+const STORE = import.meta.env.DEV ? '' : 'https://logos.marketmaker.cc';
 const ROW_HEIGHT = 112;
 const GAP = 8;
 
 type Coin = Logo & { kind: 'coin'; symbol: string; name?: string };
 type Exchange = Logo & { kind: 'exchange'; slug: string; name: string };
-type Icon = Coin | Exchange;
+type AiGroup = 'company' | 'harness';
+type Ai = Logo & { kind: 'ai'; slug: string; name: string; group: AiGroup };
+type Icon = Coin | Exchange | Ai;
+type Tab = 'coins' | 'exchanges' | 'ai';
 type SnippetKind = 'html' | 'react' | 'markdown' | 'url';
+type Variant = 'original' | 'webp';
 
 const label = (icon: Icon) => (icon.kind === 'coin' ? icon.symbol : icon.name);
 const fullName = (icon: Icon) => (icon.kind === 'coin' ? icon.name ?? icon.symbol : icon.name);
 const key = (icon: Icon) => (icon.kind === 'coin' ? icon.symbol : icon.slug);
+const isSvg = (icon: Icon) => icon.file.toLowerCase().endsWith('.svg');
 
 /** Exact storage URL: original file, or the 96px WebP thumbnail. */
 function storeUrl(icon: Icon, small: boolean): string {
@@ -30,8 +36,8 @@ function downloadRoute(icon: Icon, small: boolean): string {
 
 const attr = (value: string) => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 
-function snippet(icon: Icon, kind: SnippetKind): string {
-  const url = storeUrl(icon, false);
+function snippet(icon: Icon, kind: SnippetKind, small: boolean): string {
+  const url = storeUrl(icon, small);
   const name = fullName(icon);
   if (kind === 'url') return url;
   if (kind === 'html') return `<img src="${url}" alt="${attr(name)}" width="48" height="48">`;
@@ -77,13 +83,17 @@ const ICON_CLOSE = 'M6 6l12 12M18 6 6 18';
 function App() {
   const [coins, setCoins] = createSignal<Coin[]>([]);
   const [exchanges, setExchanges] = createSignal<Exchange[]>([]);
+  const [ai, setAi] = createSignal<Ai[]>([]);
   const [loaded, setLoaded] = createSignal(false);
   const [loadError, setLoadError] = createSignal('');
-  const [tab, setTab] = createSignal<'coins' | 'exchanges'>('coins');
+  const [tab, setTab] = createSignal<Tab>('coins');
+  const [aiGroup, setAiGroup] = createSignal<AiGroup | 'all'>('all');
   const [query, setQuery] = createSignal('');
   const [selected, setSelected] = createSignal<Icon | null>(null);
   const [sheetOpen, setSheetOpen] = createSignal(false);
   const [snippetKind, setSnippetKind] = createSignal<SnippetKind>('html');
+  const [variant, setVariant] = createSignal<Variant>('original');
+  const [naturalSize, setNaturalSize] = createSignal('');
   const [feedback, setFeedback] = createSignal('');
   const [busy, setBusy] = createSignal<string | null>(null);
   const [scrollTop, setScrollTop] = createSignal(0);
@@ -91,7 +101,7 @@ function App() {
   const [gridHeight, setGridHeight] = createSignal(560);
   const [light, setLight] = createSignal(false);
   const [stuck, setStuck] = createSignal(false);
-  const [heroKind, setHeroKind] = createSignal<'coin' | 'exchange'>('coin');
+  const [heroKind, setHeroKind] = createSignal<Icon['kind']>('coin');
   const [heroText, setHeroText] = createSignal('btc');
   const [heroIcon, setHeroIcon] = createSignal<Icon | null>(null);
   let gridElement: HTMLDivElement | undefined;
@@ -99,7 +109,8 @@ function App() {
 
   const filtered = createMemo<Icon[]>(() => {
     const term = query().trim().toLowerCase();
-    const all: Icon[] = tab() === 'coins' ? coins() : exchanges();
+    let all: Icon[] = tab() === 'coins' ? coins() : tab() === 'exchanges' ? exchanges() : ai();
+    if (tab() === 'ai' && aiGroup() !== 'all') all = ai().filter((icon) => icon.group === aiGroup());
     if (!term) return all;
     return all.filter((icon) => {
       const fields = icon.kind === 'coin' ? [icon.symbol, icon.name] : [icon.name, icon.slug];
@@ -116,6 +127,7 @@ function App() {
 
   createEffect(() => {
     tab();
+    aiGroup();
     query();
     if (gridElement) gridElement.scrollTop = 0;
     setScrollTop(0);
@@ -126,6 +138,17 @@ function App() {
     const previous = document.body.style.overflow;
     if (window.matchMedia('(max-width: 1000px)').matches) document.body.style.overflow = 'hidden';
     onCleanup(() => { document.body.style.overflow = previous; });
+  });
+
+  createEffect(() => {
+    const icon = selected();
+    setNaturalSize('');
+    if (!icon || isSvg(icon)) return;
+    const probe = new Image();
+    let stale = false;
+    probe.onload = () => { if (!stale) setNaturalSize(`${probe.naturalWidth}×${probe.naturalHeight} px`); };
+    probe.src = storeUrl(icon, false);
+    onCleanup(() => { stale = true; });
   });
 
   function pick(icon: Icon) {
@@ -182,12 +205,16 @@ function App() {
       fetch('/index/exchanges.json').then((response) => {
         if (!response.ok) throw new Error(`Exchange index returned ${response.status}`);
         return response.json() as Promise<ExchangeRow[]>;
-      })
-    ]).then(([coinRows, exchangeRows]) => {
+      }),
+      // The AI catalog is optional: the rest of the site works without it.
+      fetch('/index/ai.json').then((response) => (response.ok ? (response.json() as Promise<AiRow[]>) : [])).catch(() => [] as AiRow[])
+    ]).then(([coinRows, exchangeRows, aiRows]) => {
       const coinList: Coin[] = coinRows.map(([symbol, file, name]) => ({ kind: 'coin', symbol, name, file, sm: `${fileStem(file)}.webp` }));
       const exchangeList: Exchange[] = exchangeRows.map(([slug, name, file, sm]) => ({ kind: 'exchange', slug, name, file, sm }));
+      const aiList: Ai[] = aiRows.map(([slug, name, file, sm, group]) => ({ kind: 'ai', slug, name, file, sm, group }));
       setCoins(coinList);
       setExchanges(exchangeList);
+      setAi(aiList);
       setLoaded(true);
       const btc = coinList.find((c) => c.symbol === 'BTC') ?? coinList[0];
       setSelected(btc);
@@ -198,8 +225,11 @@ function App() {
         ...['ETH', 'SOL'].map((s) => coinList.find((c) => c.symbol === s)),
         exchangeList.find((e) => e.slug === 'binance'),
         coinList.find((c) => c.symbol === 'DOGE'),
+        aiList.find((a) => a.slug === 'claude-code'),
         exchangeList.find((e) => e.slug === 'kraken'),
-        coinList.find((c) => c.symbol === 'XRP')
+        aiList.find((a) => a.slug === 'codex'),
+        coinList.find((c) => c.symbol === 'XRP'),
+        aiList.find((a) => a.slug === 'openai')
       ].filter((item): item is Icon => Boolean(item));
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && wanted.length > 1) void cycle(wanted.map((icon) => ({ icon })));
     }).catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Could not load the icon index'));
@@ -282,12 +312,12 @@ function App() {
 
       <main id="top">
         <section class="hero wrap" aria-labelledby="hero-title">
-          <h1 id="hero-title" class="sr">Coin and exchange icons for trading</h1>
+          <h1 id="hero-title" class="sr">Coin, exchange and AI logos for trading</h1>
           <div class="hero-grid">
             <div class="hero-text">
               <p class="host mono" aria-hidden="true">logos.marketmaker.cc</p>
               <p class="path mono" aria-hidden="true"><span class="path-fixed">{heroName()}</span><span class="path-slot">{heroText()}</span><span class="caret" /></p>
-              <p class="lede">Every coin and exchange logo we use, in one place. Free to embed from Cloudflare, no keys, no sign-up.</p>
+              <p class="lede">Every coin, exchange and AI logo we use, in one place, with SVG where it exists. Free to embed from Cloudflare, no keys, no sign-up.</p>
               <div class="cta">
                 <a class="btn btn--primary" href={ZIP_URL}><Svg d={ICON_DOWN} />Download ZIP</a>
                 <a class="btn btn--ghost" href={REPO_URL} target="_blank" rel="noopener noreferrer">View on GitHub</a>
@@ -295,7 +325,8 @@ function App() {
               <dl class="facts mono">
                 <div><dt class="sr">Coins</dt><dd><b>{loaded() ? coins().length.toLocaleString() : '…'}</b> coins</dd></div>
                 <div><dt class="sr">Exchanges</dt><dd><b>{loaded() ? exchanges().length.toLocaleString() : '…'}</b> exchanges</dd></div>
-                <div><dt class="sr">Formats</dt><dd>original + 96px WebP</dd></div>
+                <Show when={ai().length > 0}><div><dt class="sr">AI</dt><dd><b>{ai().length.toLocaleString()}</b> AI logos</dd></div></Show>
+                <div><dt class="sr">Formats</dt><dd>original (SVG) + 96px WebP</dd></div>
               </dl>
             </div>
             <div class="hero-plate" aria-hidden="true">
@@ -311,18 +342,26 @@ function App() {
               <div class="chips" role="group" aria-label="Icon type">
                 <button class="chip" type="button" aria-pressed={tab() === 'coins'} onClick={() => setTab('coins')}>Coins</button>
                 <button class="chip" type="button" aria-pressed={tab() === 'exchanges'} onClick={() => setTab('exchanges')}>Exchanges</button>
+                <button class="chip" type="button" aria-pressed={tab() === 'ai'} onClick={() => setTab('ai')}>AI</button>
               </div>
               <label class="search">
                 <Svg d={ICON_SEARCH} />
                 <span class="sr">Search icons</span>
-                <input type="search" placeholder={tab() === 'coins' ? 'Search ticker or name' : 'Search exchange'} value={query()} autocomplete="off" spellcheck={false}
+                <input type="search" placeholder={tab() === 'coins' ? 'Search ticker or name' : tab() === 'exchanges' ? 'Search exchange' : 'Search AI company or tool'} value={query()} autocomplete="off" spellcheck={false}
                   onInput={(event) => setQuery(event.currentTarget.value)}
                   onKeyDown={(event) => { if (event.key === 'Enter' && filtered()[0]) pick(filtered()[0]); }} />
               </label>
             </div>
           </div>
+          <Show when={tab() === 'ai'}>
+            <div class="chips chips--sub" role="group" aria-label="AI logo group">
+              <For each={[['all', 'All'], ['harness', 'Agent harnesses'], ['company', 'Companies']] as [AiGroup | 'all', string][]}>{([id, text]) => (
+                <button class="chip chip--sm" type="button" aria-pressed={aiGroup() === id} onClick={() => setAiGroup(id)}>{text}</button>
+              )}</For>
+            </div>
+          </Show>
           <p class="count mono" role="status" aria-live="polite">
-            <Show when={!loadError()} fallback={loadError()}>{loaded() ? `${filtered().length.toLocaleString()} ${tab()}${tab() === 'coins' ? ', ranked by market cap' : ''}` : 'Loading…'}</Show>
+            <Show when={!loadError()} fallback={loadError()}>{loaded() ? `${filtered().length.toLocaleString()} ${tab() === 'ai' ? 'AI logos' : tab()}${tab() === 'coins' ? ', ranked by market cap' : ''}` : 'Loading…'}</Show>
           </p>
 
           <div class="layout">
@@ -355,12 +394,22 @@ function App() {
                       onError={(event) => { const fallback = downloadRoute(current, false); if (!event.currentTarget.src.endsWith(fallback)) event.currentTarget.src = fallback; }} />}</For>
                   </div>
                   <h3>{fullName(icon())}</h3>
-                  <p class="insp-meta mono">{icon().kind === 'coin' ? `coin, ticker ${(icon() as Coin).symbol}` : `exchange, slug ${(icon() as Exchange).slug}`}</p>
+                  <p class="insp-meta mono">{(() => { const current = icon(); return current.kind === 'coin' ? `coin, ticker ${current.symbol}` : current.kind === 'exchange' ? `exchange, slug ${current.slug}` : `AI ${current.group}, slug ${current.slug}`; })()}</p>
 
-                  <div class="insp-actions">
-                    <button class="btn btn--primary" type="button" disabled={busy() !== null} onClick={() => void download(icon(), false)}><Svg d={ICON_DOWN} />Original</button>
-                    <button class="btn btn--ghost" type="button" disabled={busy() !== null} onClick={() => void download(icon(), true)}><Svg d={ICON_DOWN} />WebP 96px</button>
-                  </div>
+                  <fieldset class="variants">
+                    <legend class="sr">File variant</legend>
+                    <label class="variant">
+                      <input type="radio" name="variant" value="original" checked={variant() === 'original'} onChange={() => setVariant('original')} />
+                      <span class="variant-body">
+                        <b>{isSvg(icon()) ? 'SVG' : icon().file.split('.').pop()?.toUpperCase()}</b>
+                        <span class="mono">{isSvg(icon()) ? 'vector, any size' : naturalSize() || 'original size'}</span>
+                      </span>
+                    </label>
+                    <label class="variant">
+                      <input type="radio" name="variant" value="webp" checked={variant() === 'webp'} onChange={() => setVariant('webp')} />
+                      <span class="variant-body"><b>WebP</b><span class="mono">96×96 px</span></span>
+                    </label>
+                  </fieldset>
 
                   <div class="snip">
                     <div class="chips" role="group" aria-label="Snippet format">
@@ -369,11 +418,14 @@ function App() {
                       )}</For>
                     </div>
                     <div class="code">
-                      <code class="mono">{snippet(icon(), snippetKind())}</code>
-                      <button class="btn btn--ghost btn--sm" type="button" onClick={() => void copy(snippet(icon(), snippetKind()), 'Snippet')}><Svg d={ICON_COPY} />Copy</button>
+                      <code class="mono">{snippet(icon(), snippetKind(), variant() === 'webp')}</code>
+                      <button class="btn btn--ghost btn--sm" type="button" onClick={() => void copy(snippet(icon(), snippetKind(), variant() === 'webp'), 'Snippet')}><Svg d={ICON_COPY} />Copy</button>
                     </div>
-                    <p class="thumb mono">96px WebP: <span>{storeUrl(icon(), true)}</span></p>
                   </div>
+
+                  <button class="btn btn--primary insp-download" type="button" disabled={busy() !== null} onClick={() => void download(icon(), variant() === 'webp')}>
+                    <Svg d={ICON_DOWN} />Download {variant() === 'webp' ? 'WebP 96px' : isSvg(icon()) ? 'SVG' : icon().file.split('.').pop()?.toUpperCase()}
+                  </button>
                   <p class="insp-status" role="status" aria-live="polite">{feedback()}</p>
                 </>
               )}</Show>
@@ -391,6 +443,8 @@ function App() {
             <li><code class="mono">logos.marketmaker.cc/coin-logos/sm/<b>btc.webp</b></code><p>Coin thumbnail, 96px WebP. Use it for lists and tables.</p></li>
             <li><code class="mono">logos.marketmaker.cc/exchange-logos/<b>binance.png</b></code><p>Exchange original, named by slug.</p></li>
             <li><code class="mono">logos.marketmaker.cc/exchange-logos/sm/<b>binance.webp</b></code><p>Exchange thumbnail, 96px WebP.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/ai-logos/<b>claude-code.svg</b></code><p>AI company or agent harness, vector SVG named by slug.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/ai-logos/sm/<b>claude-code.webp</b></code><p>AI logo thumbnail, 96px WebP.</p></li>
           </ul>
         </section>
       </main>

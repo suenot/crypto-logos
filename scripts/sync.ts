@@ -23,7 +23,7 @@ async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, "utf8")) as T
 }
 
-async function writeAtomic(path: string, content: string | Uint8Array) {
+export async function writeAtomic(path: string, content: string | Uint8Array) {
   const temporary = `${path}.${process.pid}.sync-part`
   await mkdir(dirname(path), { recursive: true })
   await writeFile(temporary, content)

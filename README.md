@@ -1,6 +1,6 @@
 # Crypto Logos
 
-A searchable collection of trading logos for coins and exchanges. The gallery and downloads live at [logos.marketmaker.cc](https://logos.marketmaker.cc), which also serves the images from Cloudflare R2 storage. The old `icons.marketmaker.cc` and `logos.listingapis.com` keep working.
+A searchable collection of logos for coins, exchanges, AI companies, models, and agent harnesses. The gallery and downloads live at [logos.marketmaker.cc](https://logos.marketmaker.cc), which also serves the images from Cloudflare R2 storage. The old `icons.marketmaker.cc` and `logos.listingapis.com` keep working.
 
 ## Get started
 
@@ -22,6 +22,8 @@ Sync reads the listing logo maps and skips monograms. Coin originals keep their 
 
 Every ticker with an image appears in the catalog. Full syncs refresh the [CoinMarketCap quick-search snapshot](https://s2.coinmarketcap.com/generated/search/quick_search.json) and use the best-ranked match for each ticker. If the refresh fails, sync uses `data/coinmarketcap.json`. Unranked entries sort alphabetically after ranked coins. Use `--index-only` to rebuild the catalogs offline from the listing maps and saved metadata. Combine it with `--refresh-metadata` to refresh the snapshot without downloading images.
 
+Run `bun run sync:ai` to generate the AI SVGs in `icons/ai/`, 96×96 WebP thumbnails in `icons/sm/ai/`, and the catalog in `data/ai.json` from the pinned npm packages. For an offline sync, set `AI_LOGO_TARBALL_DIR` to a directory containing `lobehub-icons-static-svg-1.104.0.tgz` and `simple-icons-16.15.0.tgz`. Run `bun --no-env-file scripts/upload-ai.ts --dry-run` to list the R2 keys and content types.
+
 ## Embed an icon
 
 The files live in the Cloudflare R2 bucket `listingapis-logos`. `https://logos.marketmaker.cc` serves them under the exact storage paths (the same keys the listing project uses via `logos.listingapis.com`). Every project uses these paths:
@@ -32,8 +34,10 @@ The files live in the Cloudflare R2 bucket `listingapis-logos`. `https://logos.m
 | Coin thumbnail, 96px WebP | `https://logos.marketmaker.cc/coin-logos/sm/<lowercase-ticker>.webp` |
 | Exchange original | `https://logos.marketmaker.cc/exchange-logos/<file>` |
 | Exchange thumbnail, 96px WebP | `https://logos.marketmaker.cc/exchange-logos/sm/<slug>.webp` |
+| AI original, SVG | `https://logos.marketmaker.cc/ai-logos/<slug>.svg` |
+| AI thumbnail, 96px WebP | `https://logos.marketmaker.cc/ai-logos/sm/<slug>.webp` |
 
-The extension of an original varies, so take the exact file name from `data/coins.json` and `data/exchanges.json` (or from the icon panel on the site).
+Take the exact original file name from `data/coins.json`, `data/exchanges.json`, or `data/ai.json` (or from the icon panel on the site). AI originals are always SVGs.
 
 ```html
 <img src="https://logos.marketmaker.cc/coin-logos/btc.png" alt="Bitcoin" width="48" height="48">

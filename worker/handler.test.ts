@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Coin, Exchange } from "../data/catalog";
+import type { AiLogo, Coin, Exchange } from "../data/catalog";
 import { createHandler, type Environment, type IconCache } from "./handler";
 
 const coins: Coin[] = [
@@ -13,6 +13,10 @@ const coins: Coin[] = [
 const exchanges: Exchange[] = [
   { slug: "example-exchange", name: "Example Exchange", file: "example-exchange.png", sm: "example-exchange.webp" },
 ];
+const ai: AiLogo[] = [
+  { slug: "claude-code", name: "Claude Code", kind: "harness", file: "claude-code.svg", sm: "claude-code.webp" },
+];
+const claudeCodeSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h2v2z"/></svg>';
 
 function setup(files: Record<string, string>) {
   const reads: string[] = [];
@@ -42,7 +46,7 @@ function setup(files: Record<string, string>) {
 describe("icon routes", () => {
   test("resolves symbols case-insensitively before slug aliases and defaults to the R2 thumbnail", async () => {
     const { env, reads } = setup({ "coin-logos/sm/eth.webp": "small" });
-    const response = await createHandler(coins, exchanges)(new Request("https://icons.test/coin/eTh"), env);
+    const response = await createHandler(coins, exchanges, ai)(new Request("https://icons.test/coin/eTh"), env);
     expect(await response.text()).toBe("small");
     expect(reads).toEqual(["coin-logos/sm/eth.webp"]);
     expect(response.headers.get("Content-Type")).toBe("image/webp");
@@ -56,7 +60,7 @@ describe("icon routes", () => {
       "coin-logos/sm/$trump.webp": "dollar",
       "coin-logos/龙long.png": "unicode",
     });
-    const handle = createHandler(coins, exchanges);
+    const handle = createHandler(coins, exchanges, ai);
     const numeric = await handle(new Request("https://icons.test/coin/4444?size=full"), env);
     const dollar = await handle(new Request("https://icons.test/coin/%24TrUmP.webp"), env);
     const unicode = await handle(new Request("https://icons.test/coin/%E9%BE%99LONG.png"), env);
@@ -71,7 +75,7 @@ describe("icon routes", () => {
 
   test("looks up a complete ticker before interpreting its suffix as an extension", async () => {
     const { env, reads } = setup({ "coin-logos/sm/eth.png.webp": "dotted ticker" });
-    const response = await createHandler(coins, exchanges)(new Request("https://icons.test/coin/eth.png"), env);
+    const response = await createHandler(coins, exchanges, ai)(new Request("https://icons.test/coin/eth.png"), env);
     expect(await response.text()).toBe("dotted ticker");
     expect(reads).toEqual(["coin-logos/sm/eth.png.webp"]);
   });
@@ -81,7 +85,7 @@ describe("icon routes", () => {
       "coin-logos/eth.png": "full",
       "coin-logos/sm/eth.webp": "small",
     });
-    const handle = createHandler(coins, exchanges);
+    const handle = createHandler(coins, exchanges, ai);
     const original = await handle(new Request("https://icons.test/coin/ethereum.svg"), env);
     const thumbnail = await handle(new Request("https://icons.test/coin/ETH.jpg?size=sm"), env);
     const fullWebp = await handle(new Request("https://icons.test/coin/ETH.webp?size=full"), env);
@@ -95,23 +99,51 @@ describe("icon routes", () => {
 
   test("serves exchanges and falls back to the original when R2 has no thumbnail", async () => {
     const { env, reads } = setup({ "exchange-logos/example-exchange.png": "exchange" });
-    const response = await createHandler(coins, exchanges)(new Request("https://icons.test/exchange/EXAMPLE-EXCHANGE"), env);
+    const response = await createHandler(coins, exchanges, ai)(new Request("https://icons.test/exchange/EXAMPLE-EXCHANGE"), env);
     expect(await response.text()).toBe("exchange");
     expect(reads).toEqual(["exchange-logos/sm/example-exchange.webp", "exchange-logos/example-exchange.png"]);
     expect(response.headers.get("Content-Type")).toBe("image/png");
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=300");
   });
 
+  test("serves the AI SVG for full size and the WebP for small size", async () => {
+    const { env, reads } = setup({
+      "ai-logos/claude-code.svg": claudeCodeSvg,
+      "ai-logos/sm/claude-code.webp": "small",
+    });
+    const handle = createHandler(coins, exchanges, ai);
+    const original = await handle(new Request("https://icons.test/ai/claude-code?size=full"), env);
+    expect(original.status).toBe(200);
+    expect(original.headers.get("Content-Type")).toBe("image/svg+xml");
+    expect(await original.text()).toBe(claudeCodeSvg);
+    const thumbnail = await handle(new Request("https://icons.test/ai/CLAUDE-CODE?size=sm"), env);
+    expect(thumbnail.headers.get("Content-Type")).toBe("image/webp");
+    expect(await thumbnail.text()).toBe("small");
+    expect(reads).toEqual(["ai-logos/claude-code.svg", "ai-logos/sm/claude-code.webp"]);
+  });
+
+  test("uses the exchange-style monogram for an unknown AI slug", async () => {
+    const { env, reads } = setup({});
+    const handle = createHandler(coins, exchanges, ai);
+    const unknown = await handle(new Request("https://icons.test/ai/unknown-logo?size=full"), env);
+    const exchange = await handle(new Request("https://icons.test/exchange/unknown-logo?size=full"), env);
+    expect(unknown.status).toBe(200);
+    expect(unknown.headers.get("x-icons-fallback")).toBe("1");
+    expect(unknown.headers.get("Content-Type")).toBe("image/svg+xml; charset=utf-8");
+    expect(await unknown.text()).toBe(await exchange.text());
+    expect(reads).toEqual([]);
+  });
+
   test("uses a monogram when full is requested and only the thumbnail exists", async () => {
     const { env, reads } = setup({ "coin-logos/sm/eth.webp": "small" });
-    const response = await createHandler(coins, exchanges)(new Request("https://icons.test/coin/ETH?size=full"), env);
+    const response = await createHandler(coins, exchanges, ai)(new Request("https://icons.test/coin/ETH?size=full"), env);
     expect(response.headers.get("x-icons-fallback")).toBe("1");
     expect(reads).toEqual(["coin-logos/eth.png"]);
   });
 
   test("generates a safe, briefly cached monogram for missing icons without reading guessed R2 keys", async () => {
     const { env, reads } = setup({});
-    const handle = createHandler(coins, exchanges);
+    const handle = createHandler(coins, exchanges, ai);
     const unknown = await handle(new Request("https://icons.test/coin/999999"), env);
     expect(unknown.status).toBe(200);
     expect(unknown.headers.get("x-icons-fallback")).toBe("1");
@@ -132,7 +164,7 @@ describe("icon routes", () => {
       async match(request) { return responses.get(request.url)?.clone(); },
       async put(request, response) { responses.set(request.url, response.clone()); },
     };
-    const handle = createHandler(coins, exchanges, cache);
+    const handle = createHandler(coins, exchanges, ai, cache);
     const request = new Request("https://icons.test/coin/ETH");
     expect(await (await handle(request, env)).text()).toBe("small");
     expect(await (await handle(request, env)).text()).toBe("small");
@@ -141,7 +173,7 @@ describe("icon routes", () => {
 
   test("passes through static assets and returns JSON for unknown assets and invalid sizes", async () => {
     const { env } = setup({});
-    const handle = createHandler(coins, exchanges);
+    const handle = createHandler(coins, exchanges, ai);
     const home = await handle(new Request("https://icons.test/"), env);
     expect(await home.text()).toBe("homepage");
     expect(home.headers.get("Access-Control-Allow-Origin")).toBe("*");
@@ -158,7 +190,7 @@ describe("icon routes", () => {
 describe("storage paths", () => {
   test("serves R2 keys under the same path", async () => {
     const { env } = setup({ "coin-logos/btc.png": "png", "exchange-logos/sm/binance.webp": "webp" });
-    const handle = createHandler(coins, exchanges);
+    const handle = createHandler(coins, exchanges, ai);
     const coin = await handle(new Request("https://logos.marketmaker.cc/coin-logos/btc.png"), env);
     expect(coin.status).toBe(200);
     expect(await coin.text()).toBe("png");
@@ -169,9 +201,27 @@ describe("storage paths", () => {
     expect(exchange.headers.get("Content-Type")).toBe("image/webp");
   });
 
+  test("serves AI originals and thumbnails directly from their R2 keys", async () => {
+    const { env, reads } = setup({
+      "ai-logos/claude-code.svg": claudeCodeSvg,
+      "ai-logos/sm/claude-code.webp": "small",
+    });
+    const handle = createHandler(coins, exchanges, ai);
+    const original = await handle(new Request("https://logos.marketmaker.cc/ai-logos/claude-code.svg"), env);
+    expect(original.status).toBe(200);
+    expect(original.headers.get("Content-Type")).toBe("image/svg+xml");
+    expect(original.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(original.headers.get("Cache-Control")).toBe("public, max-age=86400");
+    expect(await original.text()).toBe(claudeCodeSvg);
+    const thumbnail = await handle(new Request("https://logos.marketmaker.cc/ai-logos/sm/claude-code.webp"), env);
+    expect(thumbnail.headers.get("Content-Type")).toBe("image/webp");
+    expect(await thumbnail.text()).toBe("small");
+    expect(reads).toEqual(["ai-logos/claude-code.svg", "ai-logos/sm/claude-code.webp"]);
+  });
+
   test("404 for missing keys and traversal", async () => {
     const { env } = setup({});
-    const handle = createHandler(coins, exchanges);
+    const handle = createHandler(coins, exchanges, ai);
     expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/none.png"), env)).status).toBe(404);
     expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/%2E%2E/x.png"), env)).status).toBe(404);
   });

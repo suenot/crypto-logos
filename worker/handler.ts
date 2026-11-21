@@ -1,4 +1,4 @@
-import type { Coin, Exchange } from "../data/catalog";
+import type { AiLogo, Coin, Exchange } from "../data/catalog";
 
 interface IconObject {
   body: ReadableStream<Uint8Array>;
@@ -103,7 +103,7 @@ function setBest(map: Map<string, Coin>, key: string, candidate: Coin): void {
   if (!current || bestRank(candidate) < bestRank(current)) map.set(key, candidate);
 }
 
-export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: IconCache) {
+export function createHandler(coins: Coin[], exchanges: Exchange[], ai: AiLogo[], cache?: IconCache) {
   const bySymbol = new Map<string, Coin>();
   const bySlug = new Map<string, Coin>();
   for (const coin of coins) {
@@ -111,13 +111,14 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
     if (coin.slug) setBest(bySlug, coin.slug.toLowerCase(), coin);
   }
   const byExchange = new Map(exchanges.map((exchange) => [exchange.slug.toLowerCase(), exchange]));
+  const byAi = new Map(ai.map((logo) => [logo.slug.toLowerCase(), logo]));
 
   return async function handle(request: Request, env: Environment): Promise<Response> {
     if (request.method !== "GET") return jsonError(405, "Method not allowed");
 
     const url = new URL(request.url);
-    // Storage paths, identical to the R2 keys: /coin-logos/btc.png, /exchange-logos/sm/binance.webp
-    if (/^\/(coin|exchange)-logos\//.test(url.pathname)) {
+    // Public storage paths are identical to the R2 keys.
+    if (/^\/(coin|exchange|ai)-logos\//.test(url.pathname)) {
       let objectKey: string;
       try {
         objectKey = decodeURIComponent(url.pathname.slice(1));
@@ -140,13 +141,14 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
       return new Response(object.body, { headers });
     }
 
-    const coinMatch = /^\/coin\/([^/]+)$/.exec(url.pathname);
-    const exchangeMatch = /^\/exchange\/([^/]+)$/.exec(url.pathname);
-    if (!coinMatch && !exchangeMatch) {
+    const route = /^\/(coin|exchange|ai)\/([^/]+)$/.exec(url.pathname);
+    if (!route) {
       if (!env.ASSETS) return jsonError(404, "Not found");
       const asset = await env.ASSETS.fetch(request);
       return asset.status === 404 ? jsonError(404, "Not found") : withCors(asset);
     }
+    const [, category, encodedKey] = route;
+    const namedLogos = category === "ai" ? byAi : byExchange;
 
     const requestedSize = url.searchParams.get("size");
     if (requestedSize !== null && requestedSize !== "sm" && requestedSize !== "full") {
@@ -155,12 +157,12 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
 
     let key: string;
     try {
-      key = decodeURIComponent((coinMatch ?? exchangeMatch)![1]);
+      key = decodeURIComponent(encodedKey);
     } catch {
       return jsonError(400, "Invalid icon key");
     }
     if (/[/\\\u0000-\u001f]/.test(key)) return jsonError(404, "Not found");
-    const knownKey = coinMatch ? bySymbol.has(key.toLowerCase()) : byExchange.has(key.toLowerCase());
+    const knownKey = category === "coin" ? bySymbol.has(key.toLowerCase()) : namedLogos.has(key.toLowerCase());
     const extensionMatch = knownKey ? null : /^(.*)\.([a-z]+)$/i.exec(key);
     let extension: string | undefined;
     if (extensionMatch) {
@@ -171,7 +173,7 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
     if (!key) return jsonError(404, "Not found");
 
     let icon: ResolvedIcon | undefined;
-    if (coinMatch) {
+    if (category === "coin") {
       const symbol = bySymbol.get(key.toLowerCase());
       const coin = symbol ?? bySlug.get(key.toLowerCase());
       if (coin) {
@@ -183,12 +185,12 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], cache?: Icon
         };
       }
     } else {
-      const exchange = byExchange.get(key.toLowerCase());
-      if (exchange) {
+      const logo = namedLogos.get(key.toLowerCase());
+      if (logo) {
         icon = {
-          original: `exchange-logos/${exchange.file}`,
-          thumbnail: `exchange-logos/sm/${exchange.sm}`,
-          label: exchange.name,
+          original: `${category}-logos/${logo.file}`,
+          thumbnail: `${category}-logos/sm/${logo.sm}`,
+          label: logo.name,
           exactSymbol: false,
         };
       }

@@ -129,6 +129,7 @@ h2 { font-size: clamp(26px, 3.2vw, 38px); letter-spacing: -0.03em; line-height: 
 .chip:hover { color: var(--text); border-color: var(--text-3); }
 .chip[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .chip--sm { height: 30px; padding: 0 12px; font-size: 13px; }
+.chips--sub { flex-wrap: wrap; margin-top: 14px; }
 .search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); min-width: 240px; color: var(--text-3); }
 .search:focus-within { border-color: var(--accent); }
 .search svg { width: 16px; height: 16px; flex: none; }
@@ -159,8 +160,16 @@ h2 { font-size: clamp(26px, 3.2vw, 38px); letter-spacing: -0.03em; line-height: 
 .insp-plate img { width: 96px; height: 96px; object-fit: contain; }
 .inspector h3 { font-size: 20px; letter-spacing: -0.02em; font-weight: 600; overflow-wrap: anywhere; }
 .insp-meta { font-size: 12.5px; color: var(--text-3); margin-top: -6px; }
-.insp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.insp-actions .btn { padding: 0 12px; height: 40px; }
+.variants { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+.variant { position: relative; cursor: pointer; min-width: 0; }
+.variant input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.variant-body { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 12px; color: var(--text-2); }
+.variant-body b { font-size: 15px; font-weight: 600; color: var(--text); }
+.variant-body .mono { font-size: 12px; color: var(--text-3); }
+.variant:hover .variant-body { border-color: var(--text-3); }
+.variant input:checked + .variant-body { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.variant input:focus-visible + .variant-body { outline: 2px solid var(--accent); outline-offset: 2px; }
+.insp-download { width: 100%; height: 44px; justify-content: center; }
 .snip { display: flex; flex-direction: column; gap: 10px; }
 .code { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 12px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .code code { font-size: 12px; line-height: 1.55; color: var(--text); overflow-wrap: anywhere; word-break: break-all; }
