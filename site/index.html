@@ -1,15 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f6f7f5" />
-    <meta name="description" content="Browse, download, and embed crypto coin and exchange icons with simple Cloudflare URLs." />
+    <meta name="theme-color" content="#0a0b0d" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Crypto coin and exchange logos. Download the full set or embed from Cloudflare storage." />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Crypto Icons — Coin and Exchange Logos" />
-    <meta property="og:description" content="A searchable public library of crypto coin and exchange icons, ready to embed." />
+    <meta property="og:title" content="Trading icons: coins and exchanges" />
+    <meta property="og:description" content="4,687 coin logos and 330 exchange logos, free to download and embed." />
     <meta property="og:url" content="https://icons.marketmaker.cc/" />
-    <title>Crypto Icons — Coin and Exchange Logos</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Trading icons: coins and exchanges</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('theme');
+          if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

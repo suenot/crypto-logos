@@ -1,51 +1,42 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { fileStem, type CoinRow, type ExchangeRow, type Logo } from '../../data/catalog';
+import logoSvg from './logo.svg?raw';
 
 const REPO_URL = 'https://github.com/suenot/crypto-icons';
 const ZIP_URL = 'https://github.com/suenot/crypto-icons/archive/refs/heads/main.zip';
-const ICONS_ORIGIN = 'https://icons.marketmaker.cc';
-const IMAGE_ORIGIN = 'https://logos.listingapis.com';
-const ROW_HEIGHT = 146;
-const GRID_GAP = 12;
+// Canonical storage. Every project embeds icons from these exact paths (the same ones the listing project uses).
+const STORE = 'https://logos.listingapis.com';
+const ROW_HEIGHT = 112;
+const GAP = 8;
 
 type Coin = Logo & { kind: 'coin'; symbol: string; name?: string };
 type Exchange = Logo & { kind: 'exchange'; slug: string; name: string };
 type Icon = Coin | Exchange;
+type SnippetKind = 'html' | 'react' | 'markdown' | 'url';
 
-function iconName(icon: Icon): string {
-  return icon.kind === 'coin' ? icon.name ?? icon.symbol : icon.name;
+const label = (icon: Icon) => (icon.kind === 'coin' ? icon.symbol : icon.name);
+const fullName = (icon: Icon) => (icon.kind === 'coin' ? icon.name ?? icon.symbol : icon.name);
+const key = (icon: Icon) => (icon.kind === 'coin' ? icon.symbol : icon.slug);
+
+/** Exact storage URL: original file, or the 96px WebP thumbnail. */
+function storeUrl(icon: Icon, small: boolean): string {
+  return `${STORE}/${icon.kind}-logos/${small ? 'sm/' : ''}${encodeURIComponent(small ? icon.sm : icon.file)}`;
 }
 
-function iconMeta(icon: Icon): string | undefined {
-  if (icon.kind === 'exchange') return icon.slug;
-  return icon.name && icon.name !== icon.symbol ? icon.symbol : undefined;
+/** Same-origin download route (the storage domain sends no CORS headers, so blobs come through our Worker). */
+function downloadRoute(icon: Icon, small: boolean): string {
+  return `/${icon.kind}/${encodeURIComponent(key(icon))}?size=${small ? 'sm' : 'full'}`;
 }
 
-function imageUrl(icon: Icon, small: boolean): string {
-  return `${IMAGE_ORIGIN}/${icon.kind}-logos/${small ? 'sm/' : ''}${encodeURIComponent(small ? icon.sm : icon.file)}`;
-}
+const attr = (value: string) => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 
-function iconPath(icon: Icon): string {
-  const key = icon.kind === 'coin' ? icon.symbol : icon.slug;
-  return `/${icon.kind}/${encodeURIComponent(key)}`;
-}
-
-function publicUrl(icon: Icon): string {
-  return `${ICONS_ORIGIN}${iconPath(icon)}`;
-}
-
-function htmlAttribute(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
-}
-
-function examples(icon: Icon) {
-  const url = publicUrl(icon);
-  const name = iconName(icon);
-  return {
-    html: `<img src="${url}" alt="${htmlAttribute(name)}" width="48" height="48">`,
-    react: `<img src="${url}" alt={${JSON.stringify(name)}} width={48} height={48} />`,
-    markdown: `![${name.replaceAll(']', '\\]')}](${url})`
-  };
+function snippet(icon: Icon, kind: SnippetKind): string {
+  const url = storeUrl(icon, false);
+  const name = fullName(icon);
+  if (kind === 'url') return url;
+  if (kind === 'html') return `<img src="${url}" alt="${attr(name)}" width="48" height="48">`;
+  if (kind === 'react') return `<img src={${JSON.stringify(url)}} alt={${JSON.stringify(name)}} width={48} height={48} />`;
+  return `![${name.replaceAll(']', '\\]')}](${url})`;
 }
 
 async function asWebp96(source: Blob): Promise<Blob> {
@@ -75,6 +66,14 @@ async function asWebp96(source: Blob): Promise<Blob> {
   }
 }
 
+const Svg = (props: { d: string; class?: string }) => (
+  <svg class={props.class} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={props.d} /></svg>
+);
+const ICON_COPY = 'M9 9h10v10H9zM5 15V5h10';
+const ICON_DOWN = 'M12 4v11m0 0-4-4m4 4 4-4M5 20h14';
+const ICON_SEARCH = 'm21 21-4.3-4.3M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z';
+const ICON_CLOSE = 'M6 6l12 12M18 6 6 18';
+
 function App() {
   const [coins, setCoins] = createSignal<Coin[]>([]);
   const [exchanges, setExchanges] = createSignal<Exchange[]>([]);
@@ -83,37 +82,37 @@ function App() {
   const [tab, setTab] = createSignal<'coins' | 'exchanges'>('coins');
   const [query, setQuery] = createSignal('');
   const [selected, setSelected] = createSignal<Icon | null>(null);
+  const [sheetOpen, setSheetOpen] = createSignal(false);
+  const [snippetKind, setSnippetKind] = createSignal<SnippetKind>('html');
   const [feedback, setFeedback] = createSignal('');
   const [busy, setBusy] = createSignal<string | null>(null);
   const [scrollTop, setScrollTop] = createSignal(0);
-  const [gridWidth, setGridWidth] = createSignal(800);
+  const [gridWidth, setGridWidth] = createSignal(700);
   const [gridHeight, setGridHeight] = createSignal(560);
-  const [dark, setDark] = createSignal(false);
+  const [light, setLight] = createSignal(false);
+  const [stuck, setStuck] = createSignal(false);
+  const [heroKind, setHeroKind] = createSignal<'coin' | 'exchange'>('coin');
+  const [heroText, setHeroText] = createSignal('btc');
+  const [heroIcon, setHeroIcon] = createSignal<Icon | null>(null);
   let gridElement: HTMLDivElement | undefined;
-  let closeButton: HTMLButtonElement | undefined;
-  let lastTrigger: HTMLButtonElement | undefined;
+  let feedbackTimer = 0;
 
   const filtered = createMemo<Icon[]>(() => {
     const term = query().trim().toLowerCase();
     const all: Icon[] = tab() === 'coins' ? coins() : exchanges();
     if (!term) return all;
     return all.filter((icon) => {
-      const fields = icon.kind === 'coin'
-        ? [icon.symbol, icon.name]
-        : [icon.name, icon.slug];
+      const fields = icon.kind === 'coin' ? [icon.symbol, icon.name] : [icon.name, icon.slug];
       return fields.some((field) => field?.toLowerCase().includes(term));
     });
   });
 
-  const columns = createMemo(() => Math.max(2, Math.min(8, Math.floor((gridWidth() + GRID_GAP) / (126 + GRID_GAP)))));
+  const columns = createMemo(() => Math.max(3, Math.floor((gridWidth() + GAP) / (92 + GAP))));
   const rowCount = createMemo(() => Math.ceil(filtered().length / columns()));
-  const firstVisibleRow = createMemo(() => Math.max(0, Math.floor(scrollTop() / ROW_HEIGHT) - 2));
-  const lastVisibleRow = createMemo(() => Math.min(rowCount(), Math.ceil((scrollTop() + gridHeight()) / ROW_HEIGHT) + 2));
-  const visibleRows = createMemo(() => {
-    const first = firstVisibleRow();
-    return Array.from({ length: Math.max(0, lastVisibleRow() - first) }, (_, offset) => first + offset);
-  });
-  const iconsInRow = (row: number) => filtered().slice(row * columns(), (row + 1) * columns());
+  const firstRow = createMemo(() => Math.max(0, Math.floor(scrollTop() / ROW_HEIGHT) - 2));
+  const lastRow = createMemo(() => Math.min(rowCount(), Math.ceil((scrollTop() + gridHeight()) / ROW_HEIGHT) + 2));
+  const visibleRows = createMemo(() => Array.from({ length: Math.max(0, lastRow() - firstRow()) }, (_, i) => firstRow() + i));
+  const rowIcons = (row: number) => filtered().slice(row * columns(), (row + 1) * columns());
 
   createEffect(() => {
     tab();
@@ -123,51 +122,57 @@ function App() {
   });
 
   createEffect(() => {
-    if (selected()) queueMicrotask(() => closeButton?.focus());
+    if (!sheetOpen()) return;
+    const previous = document.body.style.overflow;
+    if (window.matchMedia('(max-width: 1000px)').matches) document.body.style.overflow = 'hidden';
+    onCleanup(() => { document.body.style.overflow = previous; });
   });
 
-  createEffect(() => {
-    if (!selected()) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    onCleanup(() => { document.body.style.overflow = previousOverflow; });
-  });
+  function pick(icon: Icon) {
+    setSelected(icon);
+    setFeedback('');
+    setSheetOpen(true);
+  }
 
-  function closePanel() {
-    setSelected(null);
-    queueMicrotask(() => lastTrigger?.focus());
+  function say(message: string) {
+    setFeedback(message);
+    window.clearTimeout(feedbackTimer);
+    feedbackTimer = window.setTimeout(() => setFeedback(''), 2600);
   }
 
   onMount(() => {
-    const preference = localStorage.getItem('icons-theme');
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const updateSystemTheme = () => setDark(document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && media.matches));
-    if (preference === 'dark' || preference === 'light') document.documentElement.dataset.theme = preference;
-    updateSystemTheme();
-    media.addEventListener('change', updateSystemTheme);
+    const stored = (() => { try { return localStorage.getItem('theme'); } catch { return null; } })();
+    setLight((stored ?? document.documentElement.dataset.theme) === 'light');
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && selected()) closePanel();
-      if (event.key !== 'Tab' || !selected()) return;
-      const controls = document.querySelectorAll<HTMLElement>('.detail-panel button:not(:disabled)');
-      if (!controls.length) return;
-      const first = controls[0];
-      const last = controls[controls.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setSheetOpen(false); };
+    const onScroll = () => setStuck(window.scrollY > 8);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
 
     const observer = new ResizeObserver(([entry]) => {
       setGridWidth(entry.contentRect.width);
       setGridHeight(entry.contentRect.height);
     });
     if (gridElement) observer.observe(gridElement);
+
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+    async function cycle(steps: { icon: Icon }[]) {
+      let index = 0;
+      while (!cancelled) {
+        await sleep(2800);
+        if (document.hidden) continue;
+        index = (index + 1) % steps.length;
+        const next = steps[index].icon;
+        setHeroIcon(null);
+        while (heroText().length > 0 && !cancelled) { setHeroText((text) => text.slice(0, -1)); await sleep(34); }
+        setHeroKind(next.kind);
+        for (const char of next.file) { if (cancelled) return; setHeroText((text) => text + char); await sleep(70); }
+        setHeroIcon(next);
+      }
+    }
 
     Promise.all([
       fetch('/index/coins.json').then((response) => {
@@ -179,45 +184,59 @@ function App() {
         return response.json() as Promise<ExchangeRow[]>;
       })
     ]).then(([coinRows, exchangeRows]) => {
-      setCoins(coinRows.map(([symbol, file, name]) => ({ kind: 'coin', symbol, name, file, sm: `${fileStem(file)}.webp` })));
-      setExchanges(exchangeRows.map(([slug, name, file, sm]) => ({ kind: 'exchange', slug, name, file, sm })));
+      const coinList: Coin[] = coinRows.map(([symbol, file, name]) => ({ kind: 'coin', symbol, name, file, sm: `${fileStem(file)}.webp` }));
+      const exchangeList: Exchange[] = exchangeRows.map(([slug, name, file, sm]) => ({ kind: 'exchange', slug, name, file, sm }));
+      setCoins(coinList);
+      setExchanges(exchangeList);
       setLoaded(true);
+      const btc = coinList.find((c) => c.symbol === 'BTC') ?? coinList[0];
+      setSelected(btc);
+      setHeroIcon(btc);
+      setHeroText(btc.file);
+      const wanted: Icon[] = [
+        btc,
+        ...['ETH', 'SOL'].map((s) => coinList.find((c) => c.symbol === s)),
+        exchangeList.find((e) => e.slug === 'binance'),
+        coinList.find((c) => c.symbol === 'DOGE'),
+        exchangeList.find((e) => e.slug === 'kraken'),
+        coinList.find((c) => c.symbol === 'XRP')
+      ].filter((item): item is Icon => Boolean(item));
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && wanted.length > 1) void cycle(wanted.map((icon) => ({ icon })));
     }).catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Could not load the icon index'));
 
     onCleanup(() => {
+      cancelled = true;
       observer.disconnect();
-      media.removeEventListener('change', updateSystemTheme);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll);
     });
   });
 
   function toggleTheme() {
-    const next = dark() ? 'light' : 'dark';
+    const next = light() ? 'dark' : 'light';
     document.documentElement.dataset.theme = next;
-    localStorage.setItem('icons-theme', next);
-    setDark(next === 'dark');
+    try { localStorage.setItem('theme', next); } catch { /* storage unavailable */ }
+    setLight(next === 'light');
   }
 
-  async function copy(value: string, description: string) {
+  async function copy(value: string, what: string) {
     try {
       await navigator.clipboard.writeText(value);
-      setFeedback(`${description} copied`);
+      say(`${what} copied`);
     } catch {
-      setFeedback('Clipboard access is unavailable');
+      say('Clipboard is blocked in this browser');
     }
   }
 
   async function download(icon: Icon, small: boolean) {
-    const label = small ? 'webp' : 'original';
-    setBusy(label);
-    setFeedback('');
+    setBusy(small ? 'webp' : 'original');
     try {
-      const response = await fetch(`${iconPath(icon)}?size=${small ? 'sm' : 'full'}`);
-      if (!response.ok) throw new Error(`Download returned ${response.status}`);
-      const fallback = response.headers.get('x-icons-fallback') === '1';
+      const response = await fetch(downloadRoute(icon, small));
+      if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+      const generated = response.headers.get('x-icons-fallback') === '1';
       const source = await response.blob();
       const blob = small ? await asWebp96(source) : source;
-      const filename = small ? icon.sm : fallback ? `${fileStem(icon.file)}.svg` : icon.file;
+      const filename = small ? icon.sm : generated ? `${fileStem(icon.file)}.svg` : icon.file;
       const link = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       link.href = objectUrl;
@@ -226,118 +245,160 @@ function App() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      setFeedback(`${fallback ? 'Generated ' : ''}${filename} downloaded`);
+      say(`${filename} downloaded`);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Download failed');
+      say(error instanceof Error ? error.message : 'Download failed');
     } finally {
       setBusy(null);
     }
   }
 
-  const sampleUrl = `${ICONS_ORIGIN}/coin/BTC`;
-  const sampleHtml = `<img src="${sampleUrl}" alt="Bitcoin" width="48" height="48">`;
-  const sampleReact = `<img src="${sampleUrl}" alt="Bitcoin" width={48} height={48} />`;
-  const sampleMarkdown = `![Bitcoin](${sampleUrl})`;
+  const heroName = () => `/${heroKind()}-logos/`;
 
   return (
     <>
-      <a class="skip-link" href="#gallery">Skip to gallery</a>
-      <header class="site-header">
-        <a class="wordmark" href="#top" aria-label="Crypto Icons home"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>Crypto Icons</a>
-        <nav aria-label="Primary navigation">
-          <a href="#gallery">Explore</a>
-          <a href="#use">How to use</a>
-          <button class="theme-toggle" type="button" onClick={toggleTheme} aria-label={dark() ? 'Switch to light theme' : 'Switch to dark theme'} title={dark() ? 'Light theme' : 'Dark theme'}>
-            <Show when={dark()} fallback={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5 8.5 8.5 0 1 0 20.5 14.4Z" /></svg>}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg></Show>
-          </button>
-        </nav>
+      <a class="skip" href="#browse">Skip to icons</a>
+      <header class="nav" data-stuck={stuck()}>
+        <div class="wrap">
+          <a class="brand" href="#top" aria-label="Icons home">
+            <span class="brand-logo" innerHTML={logoSvg} />
+            <span>icons<i>.marketmaker.cc</i></span>
+          </a>
+          <nav class="nav-links" aria-label="Primary">
+            <a href="#browse">Browse</a>
+            <a href="#use">Use</a>
+            <a href={REPO_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
+          </nav>
+          <div class="nav-end">
+            <button class="icon-btn theme-toggle" type="button" onClick={toggleTheme} aria-label={light() ? 'Switch to dark theme' : 'Switch to light theme'}>
+              <Show when={light()} fallback={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4" /></svg>}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5 8.5 8.5 0 1 0 20.5 14.4Z" /></svg>
+              </Show>
+            </button>
+            <a class="btn btn--primary btn--sm" href={ZIP_URL}><Svg d={ICON_DOWN} />Download ZIP</a>
+          </div>
+        </div>
       </header>
 
       <main id="top">
-        <section class="hero shell" aria-labelledby="hero-title">
-          <h1 id="hero-title">Coin and exchange icons for trading.</h1>
-          <div class="hero-actions">
-            <a class="button button-primary" href={ZIP_URL}>Download ZIP <span aria-hidden="true">↗</span></a>
-            <a class="button button-secondary" href={REPO_URL} target="_blank" rel="noopener noreferrer">View on GitHub <span aria-hidden="true">↗</span></a>
-          </div>
-          <div class="stats" aria-live="polite">
-            <div><strong>{loaded() ? coins().length.toLocaleString() : '—'}</strong><span>coin icons</span></div>
-            <div class="stat-divider" aria-hidden="true"></div>
-            <div><strong>{loaded() ? exchanges().length.toLocaleString() : '—'}</strong><span>exchange icons</span></div>
-          </div>
-        </section>
-
-        <section class="gallery-section shell" id="gallery" aria-labelledby="gallery-title">
-          <div class="section-heading"><h2 id="gallery-title">Browse icons</h2><p>Search coins by ticker or name and exchanges by name or slug.</p></div>
-          <div class="gallery-card">
-            <div class="gallery-tools">
-              <div class="tabs" role="tablist" aria-label="Icon category" onKeyDown={(event) => {
-                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-                event.preventDefault();
-                const next = tab() === 'coins' ? 'exchanges' : 'coins';
-                setTab(next);
-                document.getElementById(`${next}-tab`)?.focus();
-              }}>
-                <button type="button" role="tab" id="coins-tab" aria-controls="gallery-results" aria-selected={tab() === 'coins'} tabIndex={tab() === 'coins' ? 0 : -1} classList={{ active: tab() === 'coins' }} onClick={() => setTab('coins')}>Coins <span>{loaded() ? coins().length.toLocaleString() : '—'}</span></button>
-                <button type="button" role="tab" id="exchanges-tab" aria-controls="gallery-results" aria-selected={tab() === 'exchanges'} tabIndex={tab() === 'exchanges' ? 0 : -1} classList={{ active: tab() === 'exchanges' }} onClick={() => setTab('exchanges')}>Exchanges <span>{loaded() ? exchanges().length.toLocaleString() : '—'}</span></button>
+        <section class="hero wrap" aria-labelledby="hero-title">
+          <h1 id="hero-title" class="sr">Coin and exchange icons for trading</h1>
+          <div class="hero-grid">
+            <div class="hero-text">
+              <p class="host mono" aria-hidden="true">logos.listingapis.com</p>
+              <p class="path mono" aria-hidden="true"><span class="path-fixed">{heroName()}</span><span class="path-slot">{heroText()}</span><span class="caret" /></p>
+              <p class="lede">Every coin and exchange logo we use, in one place. Free to embed from Cloudflare, no keys, no sign-up.</p>
+              <div class="cta">
+                <a class="btn btn--primary" href={ZIP_URL}><Svg d={ICON_DOWN} />Download ZIP</a>
+                <a class="btn btn--ghost" href={REPO_URL} target="_blank" rel="noopener noreferrer">View on GitHub</a>
               </div>
-              <label class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg><span class="sr-only">Search icons</span><input type="search" placeholder="Search icons" value={query()} onInput={(event) => setQuery(event.currentTarget.value)} autocomplete="off" /></label>
+              <dl class="facts mono">
+                <div><dt class="sr">Coins</dt><dd><b>{loaded() ? coins().length.toLocaleString() : '…'}</b> coins</dd></div>
+                <div><dt class="sr">Exchanges</dt><dd><b>{loaded() ? exchanges().length.toLocaleString() : '…'}</b> exchanges</dd></div>
+                <div><dt class="sr">Formats</dt><dd>original + 96px WebP</dd></div>
+              </dl>
             </div>
-            <div class="gallery-summary" role="status" aria-live="polite">
-              <Show when={!loadError()} fallback={<span>{loadError()}</span>}>
-                <span>{loaded() ? `${filtered().length.toLocaleString()} ${tab() === 'coins' ? 'coins' : 'exchanges'}` : 'Loading icons…'}</span>
-                <span>{tab() === 'coins' ? 'Sorted by market rank, then ticker' : 'Sorted alphabetically'}</span>
-              </Show>
-            </div>
-            <div class="grid-viewport" id="gallery-results" role="tabpanel" aria-labelledby={tab() === 'coins' ? 'coins-tab' : 'exchanges-tab'} ref={gridElement} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-              <Show when={loaded() && filtered().length === 0}><p class="empty-state">No icons match “{query()}”. Try a different search.</p></Show>
-              <div class="grid-space" style={{ height: `${rowCount() * ROW_HEIGHT}px` }}>
-                <For each={visibleRows()}>{(row) => <div class="grid-row" style={{ top: `${row * ROW_HEIGHT}px`, 'grid-template-columns': `repeat(${columns()}, minmax(0, 1fr))` }}>
-                  <For each={iconsInRow(row)}>{(icon) => <button class="icon-card" type="button" onClick={(event) => { lastTrigger = event.currentTarget; setSelected(icon); setFeedback(''); }} aria-label={`View ${iconName(icon)}${icon.kind === 'coin' && iconMeta(icon) ? `, ${icon.symbol}` : ''}`}>
-                    <span class="icon-image"><img src={imageUrl(icon, true)} alt="" width="50" height="50" loading="lazy" onError={(event) => { const fallback = `${iconPath(icon)}?size=sm`; if (!event.currentTarget.src.endsWith(fallback)) event.currentTarget.src = fallback; }} /></span>
-                    <span class="icon-name">{iconName(icon)}</span>
-                    <Show when={iconMeta(icon)}>{(meta) => <span class="icon-meta">{meta()}</span>}</Show>
-                  </button>}</For>
-                </div>}</For>
-              </div>
+            <div class="hero-plate" aria-hidden="true">
+              <For each={[heroIcon()]}>{(icon) => <Show when={icon}>{(current) => <img class="pop" src={storeUrl(current(), false)} alt="" />}</Show>}</For>
             </div>
           </div>
         </section>
 
-        <section class="use-section shell" id="use" aria-labelledby="use-title">
-          <div class="section-heading"><h2 id="use-title">Use in your project</h2><p>Use the ticker symbol for coins and the slug for exchanges. URL-encode tickers with special characters.</p></div>
-          <div class="usage-layout">
-            <div class="usage-copy">
-              <p>Every icon is available through a stable Cloudflare URL. The default serves a 96px WebP thumbnail. Add <code>?size=full</code> for the original file.</p>
-              <p>Keep the icon files in this collection. Use its Cloudflare URLs directly in image tags across all our trading projects.</p>
-              <p class="cache-note">Coin ticker URLs are cached for one year. Exchange URLs and coin slug aliases are cached for one day.</p>
-            </div>
-            <div class="code-stack">
-              <For each={[
-                { label: 'HTML', value: sampleHtml },
-                { label: 'React', value: sampleReact },
-                { label: 'Markdown', value: sampleMarkdown }
-              ]}>{(sample) => <div class="code-card"><div class="code-top"><span>{sample.label}</span><button type="button" onClick={() => void copy(sample.value, `${sample.label} example`)} aria-label={`Copy ${sample.label} example`}>{feedback() === `${sample.label} example copied` ? 'Copied' : 'Copy'}</button></div><code>{sample.value}</code></div>}</For>
+        <section class="browse wrap" id="browse" aria-labelledby="browse-title">
+          <div class="browse-head">
+            <h2 id="browse-title">Browse</h2>
+            <div class="tools">
+              <div class="chips" role="group" aria-label="Icon type">
+                <button class="chip" type="button" aria-pressed={tab() === 'coins'} onClick={() => setTab('coins')}>Coins</button>
+                <button class="chip" type="button" aria-pressed={tab() === 'exchanges'} onClick={() => setTab('exchanges')}>Exchanges</button>
+              </div>
+              <label class="search">
+                <Svg d={ICON_SEARCH} />
+                <span class="sr">Search icons</span>
+                <input type="search" placeholder={tab() === 'coins' ? 'Search ticker or name' : 'Search exchange'} value={query()} autocomplete="off" spellcheck={false}
+                  onInput={(event) => setQuery(event.currentTarget.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter' && filtered()[0]) pick(filtered()[0]); }} />
+              </label>
             </div>
           </div>
+          <p class="count mono" role="status" aria-live="polite">
+            <Show when={!loadError()} fallback={loadError()}>{loaded() ? `${filtered().length.toLocaleString()} ${tab()}${tab() === 'coins' ? ', ranked by market cap' : ''}` : 'Loading…'}</Show>
+          </p>
+
+          <div class="layout">
+            <div class="pane">
+              <div class="scroller" ref={gridElement} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+                <Show when={loaded() && filtered().length === 0}><p class="empty">Nothing matches “{query()}”. Check the spelling or switch tabs.</p></Show>
+                <div class="space" style={{ height: `${rowCount() * ROW_HEIGHT}px` }}>
+                  <For each={visibleRows()}>{(row) => (
+                    <div class="row" style={{ top: `${row * ROW_HEIGHT}px`, 'grid-template-columns': `repeat(${columns()}, minmax(0, 1fr))` }}>
+                      <For each={rowIcons(row)}>{(icon) => (
+                        <button class="tile" type="button" aria-pressed={selected() === icon} title={fullName(icon)} onClick={() => pick(icon)}>
+                          <span class="plate"><img src={storeUrl(icon, true)} alt="" width="44" height="44" loading="lazy"
+                            onError={(event) => { const fallback = downloadRoute(icon, true); if (!event.currentTarget.src.endsWith(fallback)) event.currentTarget.src = fallback; }} /></span>
+                          <span class="tile-name mono">{label(icon)}</span>
+                        </button>
+                      )}</For>
+                    </div>
+                  )}</For>
+                </div>
+              </div>
+            </div>
+
+            <button class="backdrop" type="button" tabIndex={-1} aria-hidden="true" data-open={sheetOpen()} onClick={() => setSheetOpen(false)} />
+            <aside class="inspector" data-open={sheetOpen()} aria-label="Selected icon">
+              <Show when={selected()} fallback={<p class="empty-inspector">Pick an icon to see its URL and downloads.</p>}>{(icon) => (
+                <>
+                  <button class="icon-btn close" type="button" onClick={() => setSheetOpen(false)} aria-label="Close"><Svg d={ICON_CLOSE} /></button>
+                  <div class="insp-plate">
+                    <For each={[icon()]}>{(current) => <img class="pop" src={storeUrl(current, false)} alt={`${fullName(current)} logo`}
+                      onError={(event) => { const fallback = downloadRoute(current, false); if (!event.currentTarget.src.endsWith(fallback)) event.currentTarget.src = fallback; }} />}</For>
+                  </div>
+                  <h3>{fullName(icon())}</h3>
+                  <p class="insp-meta mono">{icon().kind === 'coin' ? `coin, ticker ${(icon() as Coin).symbol}` : `exchange, slug ${(icon() as Exchange).slug}`}</p>
+
+                  <div class="insp-actions">
+                    <button class="btn btn--primary" type="button" disabled={busy() !== null} onClick={() => void download(icon(), false)}><Svg d={ICON_DOWN} />Original</button>
+                    <button class="btn btn--ghost" type="button" disabled={busy() !== null} onClick={() => void download(icon(), true)}><Svg d={ICON_DOWN} />WebP 96px</button>
+                  </div>
+
+                  <div class="snip">
+                    <div class="chips" role="group" aria-label="Snippet format">
+                      <For each={[['url', 'URL'], ['html', 'HTML'], ['react', 'React'], ['markdown', 'Markdown']] as [SnippetKind, string][]}>{([id, text]) => (
+                        <button class="chip chip--sm" type="button" aria-pressed={snippetKind() === id} onClick={() => setSnippetKind(id)}>{text}</button>
+                      )}</For>
+                    </div>
+                    <div class="code">
+                      <code class="mono">{snippet(icon(), snippetKind())}</code>
+                      <button class="btn btn--ghost btn--sm" type="button" onClick={() => void copy(snippet(icon(), snippetKind()), 'Snippet')}><Svg d={ICON_COPY} />Copy</button>
+                    </div>
+                    <p class="thumb mono">96px WebP: <span>{storeUrl(icon(), true)}</span></p>
+                  </div>
+                  <p class="insp-status" role="status" aria-live="polite">{feedback()}</p>
+                </>
+              )}</Show>
+            </aside>
+          </div>
+        </section>
+
+        <section class="use wrap" id="use" aria-labelledby="use-title">
+          <div class="use-head">
+            <h2 id="use-title">Use these paths in every project</h2>
+            <p>The files already live in our Cloudflare R2 bucket and the listing project loads them from there. Other projects reuse the same URLs, so there is one copy to maintain. Do not copy icons into another repository.</p>
+          </div>
+          <ul class="paths">
+            <li><code class="mono">logos.listingapis.com/coin-logos/<b>btc.png</b></code><p>Coin original. The file name is the lowercase ticker and the extension is the stored one, so take it from the icon panel.</p></li>
+            <li><code class="mono">logos.listingapis.com/coin-logos/sm/<b>btc.webp</b></code><p>Coin thumbnail, 96px WebP. Use it for lists and tables.</p></li>
+            <li><code class="mono">logos.listingapis.com/exchange-logos/<b>binance.png</b></code><p>Exchange original, named by slug.</p></li>
+            <li><code class="mono">logos.listingapis.com/exchange-logos/sm/<b>binance.webp</b></code><p>Exchange thumbnail, 96px WebP.</p></li>
+          </ul>
         </section>
       </main>
 
-      <footer class="site-footer shell"><p>Logos are trademarks of their respective owners and are provided to identify the listed assets.</p><a href={REPO_URL} target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a></footer>
-
-      <Show when={selected()}>{(icon) => {
-        const snippets = examples(icon());
-        return <div class="detail-layer"><div class="detail-backdrop" onClick={closePanel} aria-hidden="true"></div><aside class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-          <div class="panel-top"><span>Icon details</span><button type="button" class="close-button" ref={closeButton} onClick={closePanel} aria-label="Close icon details">×</button></div>
-          <div class="preview-box"><img src={imageUrl(icon(), false)} alt={`${iconName(icon())} logo`} width="150" height="150" onError={(event) => { const fallback = `${iconPath(icon())}?size=full`; if (!event.currentTarget.src.endsWith(fallback)) event.currentTarget.src = fallback; }} /></div>
-          <h2 id="detail-title">{iconName(icon())}</h2>
-          <Show when={iconMeta(icon())}>{(meta) => <p class="detail-subtitle">{icon().kind === 'exchange' ? `Exchange · ${meta()}` : meta()}</p>}</Show>
-          <div class="detail-actions"><button class="button button-primary" type="button" disabled={busy() !== null} onClick={() => void download(icon(), false)}>Download original</button><button class="button button-secondary" type="button" disabled={busy() !== null} onClick={() => void download(icon(), true)}>Download WebP</button></div>
-          <div class="detail-copy"><h3>Embed this icon</h3><div class="detail-url"><code>{publicUrl(icon())}</code></div><div class="copy-actions"><button type="button" onClick={() => void copy(publicUrl(icon()), 'URL')}>Copy URL</button><button type="button" onClick={() => void copy(snippets.html, 'HTML snippet')}>Copy &lt;img&gt; snippet</button><button type="button" onClick={() => void copy(snippets.react, 'React snippet')}>Copy React snippet</button></div></div>
-          <p class="panel-feedback" role="status" aria-live="polite">{feedback()}</p>
-        </aside></div>;
-      }}</Show>
-      <div class="global-feedback sr-only" role="status" aria-live="polite">{selected() ? '' : feedback()}</div>
+      <footer class="foot wrap">
+        <p>Logos belong to their owners and are shown only to identify the listed assets.</p>
+        <div><a href="https://marketmaker.cc" target="_blank" rel="noopener noreferrer">marketmaker.cc</a><a href={REPO_URL} target="_blank" rel="noopener noreferrer">GitHub</a></div>
+      </footer>
     </>
   );
 }

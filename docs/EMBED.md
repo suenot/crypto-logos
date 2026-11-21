@@ -1,35 +1,38 @@
 # Embed coin and exchange icons
 
-Use `https://icons.marketmaker.cc` as the source for coin and exchange logos in all our trading projects. Link to the Cloudflare URLs and keep the original files in the icon collection.
+Embed icons from the Cloudflare R2 storage that the listing project already uses. Do not invent other URLs, do not copy files into your project, and do not use other icon sources.
 
-| Path | Resolves |
+Base: `https://logos.listingapis.com`
+
+| What | Path |
 | --- | --- |
-| `/coin/BTC` or `/coin/4444` | Coin ticker symbol, case-insensitive |
-| `/coin/%24TRUMP` or `/coin/%E9%BE%99LONG` | URL-encoded tickers `$TRUMP` and `龙LONG` |
-| `/exchange/binance` | Exchange slug, case-insensitive |
-| `/index/coins.json` | Compact gallery coin index |
-| `/index/exchanges.json` | Compact gallery exchange index |
+| Coin original | `/coin-logos/<lowercase-ticker>.<ext>` |
+| Coin thumbnail, 96px WebP | `/coin-logos/sm/<lowercase-ticker>.webp` |
+| Exchange original | `/exchange-logos/<file>` |
+| Exchange thumbnail, 96px WebP | `/exchange-logos/sm/<slug>.webp` |
 
-Use `encodeURIComponent(symbol)` when building a coin URL from a ticker. The Worker looks up the ticker first, then checks any available coin slug aliases. If a slug is shared, the best-ranked coin wins.
-
-Requests default to the 96px-wide WebP. Use `?size=sm` for the small version or `?size=full` for the stored original. Optional suffixes are accepted. `.webp` selects the small version by default and `.png`, `.jpg`, and `.svg` select the original. The query parameter takes precedence and the response declares the actual image format in `Content-Type`. When only the original is available, a small request can return it. An unavailable icon returns a generated SVG and `x-icons-fallback: 1`. Unknown paths return JSON with HTTP 404.
+- The coin file name is the lowercase ticker. Tickers with special characters are URL-encoded (`$TRUMP`, CJK symbols).
+- The extension of an original differs per file (`.png`, `.jpg`, `.webp`, `.svg`). Read the exact `file` from `data/coins.json` or `data/exchanges.json` in this repository, or copy it from the icon panel on icons.marketmaker.cc. Thumbnails are always `.webp`.
+- To see how the listing project builds these URLs, read `~/projects/trading/listing`.
 
 **HTML**
 
 ```html
-<img src="https://icons.marketmaker.cc/coin/BTC" alt="Bitcoin" width="48" height="48">
+<img src="https://logos.listingapis.com/coin-logos/btc.png" alt="Bitcoin" width="48" height="48">
 ```
 
 **React**
 
 ```jsx
-<img src="https://icons.marketmaker.cc/exchange/binance" alt="Binance" width={48} height={48} />
+<img src={"https://logos.listingapis.com/exchange-logos/binance.jpg"} alt="Binance" width={48} height={48} />
 ```
 
 **Markdown**
 
 ```md
-![Bitcoin](https://icons.marketmaker.cc/coin/BTC)
+![Bitcoin](https://logos.listingapis.com/coin-logos/btc.png)
 ```
 
-Exact ticker image responses cache for one year and are immutable. Exchange and coin slug alias responses cache for one day. Fallback responses cache for five minutes. The icon and index endpoints allow cross-origin requests.
+## About icons.marketmaker.cc
+
+The site is for browsing, searching and downloading (single files, or the whole library as a ZIP from GitHub). Its Worker also serves same-origin helper routes that the page uses to download files, `/coin/{SYMBOL}?size=full|sm` and `/exchange/{slug}?size=full|sm`, plus `/index/coins.json` and `/index/exchanges.json`. These routes are not the embed scheme.
