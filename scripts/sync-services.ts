@@ -11,34 +11,39 @@ import { normalizeSvg, unpackSource } from "./sync-ai"
 // Exchanges, coins and AI companies have their own categories and are not repeated here.
 // Each entry lists its sources in order of preference: a package icon ("simple-icons:file.svg",
 // "lobe-icons:file.svg"), the brand's own site icon, or the brand's official GitHub organization avatar.
+// "vendor:<file>@<origin>" reads sources/services/<file>: an exact copy of the brand's own icon at <origin>,
+// kept in the repo because that site refuses scripted downloads (bot walls, a TLS chain outside the public roots).
+// Every logo is checked by eye against the brand's current site before it ships.
 type Entry = [slug: string, name: string, kind: ServiceLogo["kind"], sources: string[]]
 
 export const entries: Entry[] = [
   ["mcp", "Model Context Protocol", "registry", ["simple-icons:modelcontextprotocol.svg"]],
-  ["glama", "Glama", "registry", ["lobe-icons:glama.svg"]],
-  ["smithery", "Smithery", "registry", ["lobe-icons:smithery-color.svg","lobe-icons:smithery.svg"]],
+  ["glama", "Glama", "registry", ["https://glama.ai/favicon.svg", "https://glama.ai/pwa-icon.png"]],
+  ["smithery", "Smithery", "registry", ["https://www.smithery.ai/favicon.svg", "https://www.smithery.ai/apple-touch-icon.png"]],
   ["pulsemcp", "PulseMCP", "registry", ["https://github.com/pulsemcp.png?size=256"]],
   ["mcp-so", "mcp.so", "registry", ["lobe-icons:mcpso-color.svg","lobe-icons:mcpso.svg"]],
   ["mcpmarket", "MCP Market", "registry", ["https://mcpmarket.com/favicon.png"]],
   ["github", "GitHub", "tool", ["simple-icons:github.svg"]],
-  ["ccxt", "CCXT", "tool", ["https://github.com/ccxt.png?size=256"]],
-  ["tradingview", "TradingView", "tool", ["simple-icons:tradingview.svg"]],
+  ["ccxt", "CCXT", "tool", ["https://docs.ccxt.com/icon.svg"]],
+  ["tradingview", "TradingView", "tool", ["https://static.tradingview.com/static/images/favicon/android-chrome-512x512.png"]],
   ["quantconnect", "QuantConnect", "tool", ["simple-icons:quantconnect.svg"]],
   ["freqtrade", "Freqtrade", "tool", ["https://www.freqtrade.io/en/stable/images/logo.png","https://github.com/freqtrade.png?size=256"]],
   ["tradestaq", "TradeStaq", "tool", ["https://www.tradestaq.com/apple-icon.png"]],
-  ["alpaca", "Alpaca", "broker", ["https://alpaca.markets/icon.svg", "https://github.com/alpacahq.png?size=256"]],
-  ["t-bank", "T-Bank (T-Invest)", "broker", ["https://github.com/Tinkoff.png?size=256"]],
+  ["alpaca", "Alpaca", "broker", ["https://alpaca.markets/icon.svg"]],
+  ["t-bank", "T-Bank (T-Invest)", "broker", ["vendor:t-bank.png@https://cdn.tbank.ru/params/common_front/resourses/icons/new/icon-512x512.png"]],
   ["public-com", "Public.com", "broker", ["https://public.com/wp-content/uploads/2026/03/favicon.svg","https://public.com/wp-content/uploads/2026/03/favicon-180x180-1.png"]],
-  ["clear-street", "Clear Street", "broker", ["https://github.com/clear-street.png?size=256"]],
+  ["clear-street", "Clear Street", "broker", ["https://www.clearstreet.io/icon.svg"]],
   ["zerodha", "Zerodha", "broker", ["simple-icons:zerodha.svg"]],
   ["metatrader", "MetaTrader", "broker", ["https://www.metatrader5.com/i/favicons/apple-touch-icon-180x180.png"]],
-  ["coingecko", "CoinGecko", "data", ["https://github.com/coingecko.png?size=256"]],
-  ["coinmarketcap", "CoinMarketCap", "data", ["simple-icons:coinmarketcap.svg"]],
+  ["coingecko", "CoinGecko", "data", ["https://1419036772-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/organizations%2FnJ08f98e3wFUIuIbM8N7%2Fsites%2Fsite_Jusyp%2Ficon%2FsJWmHFbIQeZ7Gq8xFJfK%2FApp%20Icon%20Grid.png?alt=media&token=13bfe52f-7214-4752-a0f8-a0e1fe42d859"]],
+  ["coinmarketcap", "CoinMarketCap", "data", ["https://coinmarketcap.com/apple-touch-icon.png"]],
   ["defillama", "DefiLlama", "data", ["https://github.com/DefiLlama.png?size=256"]],
   ["coinpaprika", "CoinPaprika", "data", ["https://coinpaprika.com/favicon.svg","https://coinpaprika.com/apple-touch-icon.png"]],
   ["coinapi", "CoinAPI", "data", ["https://github.com/coinapi.png?size=256"]],
   ["alpha-vantage", "Alpha Vantage", "data", ["https://github.com/alphavantage.png?size=256"]],
   ["trading-economics", "Trading Economics", "data", ["https://d3e5kp2e91w0k0.cloudfront.net/favicon.svg"]],
+  ["fred", "FRED", "data", ["vendor:fred.svg@https://fred.stlouisfed.org/images/FRED_Logo_for_Waffle.svg"]],
+  ["sec", "SEC EDGAR", "data", ["vendor:sec.png@https://www.sec.gov/themes/custom/uswds_sec/assets/img/favicons/android-chrome-512x512.png"]],
   ["financial-datasets", "Financial Datasets", "data", ["https://www.financialdatasets.ai/apple-touch-icon.png"]],
   ["tickdb", "TickDB", "data", ["https://tickdb.ai/android-chrome-512x512.png"]],
   ["coincap", "CoinCap", "data", ["https://coincap.io/static/icons/apple-touch-icon-180x180.png"]],
@@ -51,13 +56,13 @@ export const entries: Entry[] = [
   ["nansen", "Nansen", "onchain", ["https://framerusercontent.com/images/NKwtRwJIxYWpzW6NWnqma6yeJ0.png","https://github.com/nansen-ai.png?size=256"]],
   ["bitquery", "Bitquery", "onchain", ["https://bitquery.io/favicon/favicon-192x192.png"]],
   ["dune", "Dune", "onchain", ["https://dune.com/assets/favicon.svg","https://dune.com/assets/apple-touch-icon.png"]],
-  ["alchemy", "Alchemy", "onchain", ["simple-icons:alchemy.svg"]],
+  ["alchemy", "Alchemy", "onchain", ["https://media.alchemy.com/1699253173-alchemy-logo.svg"]],
   ["hive-intelligence", "Hive Intelligence", "onchain", ["https://www.hiveintelligence.xyz/brand/favicon-512.png"]],
   ["whale-alert", "Whale Alert", "onchain", ["https://whale-alert.io/assets/images/web-app-manifest-192x192.png"]],
   ["deep-blue-alpha", "Deep Blue Alpha", "onchain", ["https://deepbluealpha.io/static/img/apple-touch-icon.png"]],
   ["glassnode", "Glassnode", "onchain", ["https://glassnode.com/favicon.png"]],
   ["arkham", "Arkham", "onchain", ["https://logos.marketmaker.cc/coin-logos/arkm.png"]],
-  ["whaleradar", "WhaleRadar", "signals", ["https://whaleradar.com/favicon.svg","https://whaleradar.com/apple-touch-icon.png"]],
+  ["whaleradar", "WhaleRadar", "signals", ["https://whaleradar.com/icon-512.png", "https://whaleradar.com/apple-touch-icon.png"]],
   ["antalpha", "Antalpha", "signals", ["https://www.antalpha.com/apple-icon.png?apple-icon.2u-2xk6xt2wmn.png"]],
   ["coinrithm", "CoinRithm", "signals", ["https://www.coinrithm.com/icon.png?icon.1mk3n35yfxadj.png"]],
   ["polymarket", "Polymarket", "signals", ["https://polymarket.com/icons/apple-touch-icon.png"]],
@@ -76,6 +81,49 @@ async function download(url: string): Promise<{ bytes: Buffer; type: string }> {
   return { bytes: Buffer.from(await response.arrayBuffer()), type: response.headers.get("content-type") ?? "" }
 }
 
+// Inlines the light-theme rules of an embedded <style> as presentation attributes, so the SVG passes normalizeSvg
+// and renders the same in every context. Dark-mode @media blocks are dropped. Only plain tag and .class selectors
+// are supported; anything else throws, so an unsupported stylesheet is never silently mangled.
+export function inlineSvgStyles(svg: string): string {
+  const rules: { selector: string; attributes: [string, string][] }[] = []
+  let out = svg.replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, body: string) => {
+    let css = body.replace(/\/\*[\s\S]*?\*\//g, "")
+    for (let at = css.search(/@media\b/); at >= 0; at = css.search(/@media\b/)) {
+      let depth = 0
+      let end = css.indexOf("{", at)
+      if (end < 0) throw new Error("Unclosed @media rule")
+      for (; end < css.length; end++) {
+        if (css[end] === "{") depth++
+        else if (css[end] === "}" && --depth === 0) break
+      }
+      css = css.slice(0, at) + css.slice(end + 1)
+    }
+    for (const [, selectors, declarations] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const attributes = declarations.split(";")
+        .map(declaration => declaration.split(":").map(part => part.trim()) as [string, string])
+        .filter(([name, value]) => name && value)
+      for (const selector of selectors.split(",").map(part => part.trim())) {
+        if (!/^\.?[A-Za-z][\w-]*$/.test(selector)) throw new Error(`Unsupported SVG style selector ${selector}`)
+        rules.push({ selector, attributes })
+      }
+    }
+    return ""
+  })
+  // Class rules go first: an attribute is only added when the element has none, so a class beats a tag, as in CSS.
+  rules.sort((a, b) => Number(b.selector.startsWith(".")) - Number(a.selector.startsWith(".")))
+  for (const { selector, attributes } of rules) {
+    const matches = selector.startsWith(".")
+      ? (tag: string) => (/\sclass\s*=\s*["']([^"']*)["']/.exec(tag)?.[1].split(/\s+/) ?? []).includes(selector.slice(1))
+      : (tag: string) => new RegExp(`^<${selector}\\b`).test(tag)
+    out = out.replace(/<(?!\/|!|\?)[^>]+>/g, tag => {
+      if (!matches(tag)) return tag
+      const extra = attributes.filter(([name]) => !new RegExp(`\\s${name}\\s*=`).test(tag)).map(([name, value]) => ` ${name}="${value}"`).join("")
+      return tag.replace(/\s*(\/?)>$/, `${extra}$1>`)
+    })
+  }
+  return out
+}
+
 type Built = { file: string; original: Buffer | string; webp: Buffer; source: string }
 
 async function build(slug: string, source: string, packages: Record<string, string>, hexBySlug: Map<string, string>): Promise<Built> {
@@ -89,10 +137,13 @@ async function build(slug: string, source: string, packages: Record<string, stri
     if (name === "simple-icons" && !hex) throw new Error(`Missing brand color for ${file}`)
     svg = normalizeSvg(input, hex)
   } else {
-    const { bytes, type } = await download(source)
+    const vendor = /^vendor:([\w.-]+)@(https:\/\/.+)$/.exec(source)
+    const { bytes, type } = vendor
+      ? { bytes: await readFile(join(resolve(import.meta.dir, ".."), "sources", "services", vendor[1])), type: vendor[1].endsWith(".svg") ? "image/svg+xml" : "" }
+      : await download(source)
     const text = bytes.subarray(0, 512).toString("utf8")
     if (type.includes("svg") || /^\s*(<\?xml[^>]*>\s*)?<svg\b/.test(text)) {
-      svg = normalizeSvg(bytes.toString("utf8").replace(/^\s*<\?xml[^>]*>\s*/, "").replace(/<!--[\s\S]*?-->/g, ""))
+      svg = normalizeSvg(inlineSvgStyles(bytes.toString("utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/^\s*<\?xml[^>]*>\s*/, "").trimStart()))
     } else {
       const meta = await sharp(bytes).metadata()
       if (!meta.width || !meta.height || Math.max(meta.width, meta.height) < 64) throw new Error(`${source} is smaller than 64px`)
@@ -127,7 +178,7 @@ async function syncServices() {
       if (!built) { failures.push(`${slug}: ${errors.join("; ")}`); continue }
       await writeAtomic(join(root, "icons", "services", built.file), built.original)
       await writeAtomic(join(root, "icons", "sm", "services", `${slug}.webp`), built.webp)
-      rows.push({ slug, name, kind, file: built.file, sm: `${slug}.webp`, source: built.source })
+      rows.push({ slug, name, kind, file: built.file, sm: `${slug}.webp`, source: built.source.replace(/^vendor:[\w.-]+@/, "") })
     }
     rows.sort((a, b) => a.name.localeCompare(b.name, "en"))
     await writeAtomic(join(root, "data", "services.json"), `[\n${rows.map(row => `  ${JSON.stringify(row)}`).join(",\n")}\n]\n`)
