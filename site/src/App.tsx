@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
-import { fileStem, type AiRow, type CoinRow, type ExchangeRow, type Logo } from '../../data/catalog';
+import { fileStem, type AiRow, type CoinRow, type ExchangeRow, type Logo, type ServiceLogo, type ServiceRow } from '../../data/catalog';
 import logoSvg from './logo.svg?raw';
 
 const REPO_URL = 'https://github.com/suenot/crypto-logos';
@@ -14,8 +14,11 @@ type Coin = Logo & { kind: 'coin'; symbol: string; name?: string };
 type Exchange = Logo & { kind: 'exchange'; slug: string; name: string };
 type AiGroup = 'company' | 'harness';
 type Ai = Logo & { kind: 'ai'; slug: string; name: string; group: AiGroup };
-type Icon = Coin | Exchange | Ai;
-type Tab = 'coins' | 'exchanges' | 'ai';
+type ServiceGroup = ServiceLogo['kind'];
+type Service = Logo & { kind: 'service'; slug: string; name: string; group: ServiceGroup };
+type Icon = Coin | Exchange | Ai | Service;
+type Tab = 'coins' | 'exchanges' | 'ai' | 'services';
+const SERVICE_GROUPS: [ServiceGroup | 'all', string][] = [['all', 'All'], ['data', 'Market data'], ['news', 'News'], ['onchain', 'On-chain'], ['signals', 'Signals'], ['broker', 'Brokers'], ['dex', 'DEX'], ['tool', 'Tools'], ['registry', 'MCP registries']];
 type SnippetKind = 'html' | 'react' | 'markdown' | 'url';
 type Variant = 'original' | 'webp';
 
@@ -84,6 +87,8 @@ function App() {
   const [coins, setCoins] = createSignal<Coin[]>([]);
   const [exchanges, setExchanges] = createSignal<Exchange[]>([]);
   const [ai, setAi] = createSignal<Ai[]>([]);
+  const [services, setServices] = createSignal<Service[]>([]);
+  const [serviceGroup, setServiceGroup] = createSignal<ServiceGroup | 'all'>('all');
   const [loaded, setLoaded] = createSignal(false);
   const [loadError, setLoadError] = createSignal('');
   const [tab, setTab] = createSignal<Tab>('coins');
@@ -109,8 +114,9 @@ function App() {
 
   const filtered = createMemo<Icon[]>(() => {
     const term = query().trim().toLowerCase();
-    let all: Icon[] = tab() === 'coins' ? coins() : tab() === 'exchanges' ? exchanges() : ai();
+    let all: Icon[] = tab() === 'coins' ? coins() : tab() === 'exchanges' ? exchanges() : tab() === 'ai' ? ai() : services();
     if (tab() === 'ai' && aiGroup() !== 'all') all = ai().filter((icon) => icon.group === aiGroup());
+    if (tab() === 'services' && serviceGroup() !== 'all') all = services().filter((icon) => icon.group === serviceGroup());
     if (!term) return all;
     return all.filter((icon) => {
       const fields = icon.kind === 'coin' ? [icon.symbol, icon.name] : [icon.name, icon.slug];
@@ -128,6 +134,7 @@ function App() {
   createEffect(() => {
     tab();
     aiGroup();
+    serviceGroup();
     query();
     if (gridElement) gridElement.scrollTop = 0;
     setScrollTop(0);
@@ -207,20 +214,22 @@ function App() {
         return response.json() as Promise<ExchangeRow[]>;
       }),
       // The AI catalog is optional: the rest of the site works without it.
-      fetch('/index/ai.json').then((response) => (response.ok ? (response.json() as Promise<AiRow[]>) : [])).catch(() => [] as AiRow[])
-    ]).then(([coinRows, exchangeRows, aiRows]) => {
+      fetch('/index/ai.json').then((response) => (response.ok ? (response.json() as Promise<AiRow[]>) : [])).catch(() => [] as AiRow[]),
+      fetch('/index/services.json').then((response) => (response.ok ? (response.json() as Promise<ServiceRow[]>) : [])).catch(() => [] as ServiceRow[])
+    ]).then(([coinRows, exchangeRows, aiRows, serviceRows]) => {
       const coinList: Coin[] = coinRows.map(([symbol, file, name]) => ({ kind: 'coin', symbol, name, file, sm: `${fileStem(file)}.webp` }));
       const exchangeList: Exchange[] = exchangeRows.map(([slug, name, file, sm]) => ({ kind: 'exchange', slug, name, file, sm }));
       const aiList: Ai[] = aiRows.map(([slug, name, file, sm, group]) => ({ kind: 'ai', slug, name, file, sm, group }));
       setCoins(coinList);
       setExchanges(exchangeList);
       setAi(aiList);
+      setServices(serviceRows.map(([slug, name, file, sm, group]) => ({ kind: 'service', slug, name, file, sm, group })));
       setLoaded(true);
       const btc = coinList.find((c) => c.symbol === 'BTC') ?? coinList[0];
       setSelected(btc);
       setHeroIcon(btc);
       setHeroText(btc.file);
-      const wanted: Icon[] = [
+      const wanted = ([
         btc,
         ...['ETH', 'SOL'].map((s) => coinList.find((c) => c.symbol === s)),
         exchangeList.find((e) => e.slug === 'binance'),
@@ -230,7 +239,7 @@ function App() {
         aiList.find((a) => a.slug === 'codex'),
         coinList.find((c) => c.symbol === 'XRP'),
         aiList.find((a) => a.slug === 'openai')
-      ].filter((item): item is Icon => Boolean(item));
+      ] as (Icon | undefined)[]).filter((item): item is Icon => Boolean(item));
       if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && wanted.length > 1) void cycle(wanted.map((icon) => ({ icon })));
     }).catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Could not load the icon index'));
 
@@ -326,6 +335,7 @@ function App() {
                 <div><dt class="sr">Coins</dt><dd><b>{loaded() ? coins().length.toLocaleString() : '…'}</b> coins</dd></div>
                 <div><dt class="sr">Exchanges</dt><dd><b>{loaded() ? exchanges().length.toLocaleString() : '…'}</b> exchanges</dd></div>
                 <Show when={ai().length > 0}><div><dt class="sr">AI</dt><dd><b>{ai().length.toLocaleString()}</b> AI logos</dd></div></Show>
+                <Show when={services().length > 0}><div><dt class="sr">Services</dt><dd><b>{services().length.toLocaleString()}</b> services</dd></div></Show>
                 <div><dt class="sr">Formats</dt><dd>original (SVG) + 96px WebP</dd></div>
               </dl>
             </div>
@@ -343,11 +353,12 @@ function App() {
                 <button class="chip" type="button" aria-pressed={tab() === 'coins'} onClick={() => setTab('coins')}>Coins</button>
                 <button class="chip" type="button" aria-pressed={tab() === 'exchanges'} onClick={() => setTab('exchanges')}>Exchanges</button>
                 <button class="chip" type="button" aria-pressed={tab() === 'ai'} onClick={() => setTab('ai')}>AI</button>
+                <button class="chip" type="button" aria-pressed={tab() === 'services'} onClick={() => setTab('services')}>Services</button>
               </div>
               <label class="search">
                 <Svg d={ICON_SEARCH} />
                 <span class="sr">Search icons</span>
-                <input type="search" placeholder={tab() === 'coins' ? 'Search ticker or name' : tab() === 'exchanges' ? 'Search exchange' : 'Search AI company or tool'} value={query()} autocomplete="off" spellcheck={false}
+                <input type="search" placeholder={tab() === 'coins' ? 'Search ticker or name' : tab() === 'exchanges' ? 'Search exchange' : tab() === 'ai' ? 'Search AI company or tool' : 'Search data, news or broker'} value={query()} autocomplete="off" spellcheck={false}
                   onInput={(event) => setQuery(event.currentTarget.value)}
                   onKeyDown={(event) => { if (event.key === 'Enter' && filtered()[0]) pick(filtered()[0]); }} />
               </label>
@@ -357,6 +368,13 @@ function App() {
             <div class="chips chips--sub" role="group" aria-label="AI logo group">
               <For each={[['all', 'All'], ['harness', 'Agent harnesses'], ['company', 'Companies']] as [AiGroup | 'all', string][]}>{([id, text]) => (
                 <button class="chip chip--sm" type="button" aria-pressed={aiGroup() === id} onClick={() => setAiGroup(id)}>{text}</button>
+              )}</For>
+            </div>
+          </Show>
+          <Show when={tab() === 'services'}>
+            <div class="chips chips--sub" role="group" aria-label="Service group">
+              <For each={SERVICE_GROUPS}>{([id, text]) => (
+                <button class="chip chip--sm" type="button" aria-pressed={serviceGroup() === id} onClick={() => setServiceGroup(id)}>{text}</button>
               )}</For>
             </div>
           </Show>
@@ -394,7 +412,7 @@ function App() {
                       onError={(event) => { const fallback = downloadRoute(current, false); if (!event.currentTarget.src.endsWith(fallback)) event.currentTarget.src = fallback; }} />}</For>
                   </div>
                   <h3>{fullName(icon())}</h3>
-                  <p class="insp-meta mono">{(() => { const current = icon(); return current.kind === 'coin' ? `coin, ticker ${current.symbol}` : current.kind === 'exchange' ? `exchange, slug ${current.slug}` : `AI ${current.group}, slug ${current.slug}`; })()}</p>
+                  <p class="insp-meta mono">{(() => { const current = icon(); return current.kind === 'coin' ? `coin, ticker ${current.symbol}` : current.kind === 'exchange' ? `exchange, slug ${current.slug}` : current.kind === 'ai' ? `AI ${current.group}, slug ${current.slug}` : `service, ${SERVICE_GROUPS.find(([id]) => id === current.group)?.[1].toLowerCase() ?? current.group}, slug ${current.slug}`; })()}</p>
 
                   <fieldset class="variants">
                     <legend class="sr">File variant</legend>
@@ -445,6 +463,8 @@ function App() {
             <li><code class="mono">logos.marketmaker.cc/exchange-logos/sm/<b>binance.webp</b></code><p>Exchange thumbnail, 96px WebP.</p></li>
             <li><code class="mono">logos.marketmaker.cc/ai-logos/<b>claude-code.svg</b></code><p>AI company or agent harness, vector SVG named by slug.</p></li>
             <li><code class="mono">logos.marketmaker.cc/ai-logos/sm/<b>claude-code.webp</b></code><p>AI logo thumbnail, 96px WebP.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/service-logos/<b>coingecko.png</b></code><p>Data, news, on-chain, broker or MCP service, named by slug. SVG where the brand has one, otherwise PNG.</p></li>
+            <li><code class="mono">logos.marketmaker.cc/service-logos/sm/<b>coingecko.webp</b></code><p>Service thumbnail, 96px WebP.</p></li>
           </ul>
         </section>
       </main>

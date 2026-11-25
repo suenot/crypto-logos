@@ -12,9 +12,11 @@ Base: `https://logos.marketmaker.cc`
 | Exchange thumbnail, 96px WebP | `/exchange-logos/sm/<slug>.webp` |
 | AI original, SVG | `/ai-logos/<slug>.svg` |
 | AI thumbnail, 96px WebP | `/ai-logos/sm/<slug>.webp` |
+| Service original, SVG or PNG | `/service-logos/<file>` |
+| Service thumbnail, 96px WebP | `/service-logos/sm/<slug>.webp` |
 
 - The coin file name is the lowercase ticker. Tickers with special characters are URL-encoded (`$TRUMP`, CJK symbols).
-- Read the exact `file` from `data/coins.json`, `data/exchanges.json`, or `data/ai.json` in this repository, or copy it from the panel on logos.marketmaker.cc. AI originals are always `.svg`. Thumbnails are always `.webp`.
+- Read the exact `file` from `data/coins.json`, `data/exchanges.json`, `data/ai.json`, or `data/services.json` in this repository, or copy it from the panel on logos.marketmaker.cc. AI originals are always `.svg`. Thumbnails are always `.webp`.
 - To see how the listing project builds these URLs, read `~/projects/trading/listing`.
 
 **HTML**
@@ -37,6 +39,6 @@ Base: `https://logos.marketmaker.cc`
 
 ## About logos.marketmaker.cc
 
-The site is for browsing, searching and downloading (single files, or the whole library as a ZIP from GitHub). The page uses same-origin download helpers `/coin/{SYMBOL}?size=full|sm`, `/exchange/{slug}?size=full|sm`, and `/ai/{slug}?size=full|sm`. The AI helper returns an SVG for `size=full` and defaults to the WebP thumbnail. Unknown AI slugs return an SVG monogram.
+The site is for browsing, searching and downloading (single files, or the whole library as a ZIP from GitHub). The page uses same-origin download helpers `/coin/{SYMBOL}?size=full|sm`, `/exchange/{slug}?size=full|sm`, `/ai/{slug}?size=full|sm`, and `/service/{slug}?size=full|sm`. The AI helper returns an SVG for `size=full` and defaults to the WebP thumbnail. Unknown AI slugs return an SVG monogram.
 
-The site serves compact catalogs at `/index/coins.json`, `/index/exchanges.json`, and `/index/ai.json`. Use the storage paths in the table for embeds.
+The site serves compact catalogs at `/index/coins.json`, `/index/exchanges.json`, `/index/ai.json`, and `/index/services.json`. Use the storage paths in the table for embeds.

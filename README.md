@@ -1,6 +1,6 @@
 # Crypto Logos
 
-A searchable collection of logos for coins, exchanges, AI companies, models, and agent harnesses. The gallery and downloads live at [logos.marketmaker.cc](https://logos.marketmaker.cc), which also serves the images from Cloudflare R2 storage. The old `icons.marketmaker.cc` and `logos.listingapis.com` keep working.
+A searchable collection of logos for coins, exchanges, AI companies, models, agent harnesses, and trading services (market data, news, on-chain analytics, brokers, MCP registries and tools). The gallery and downloads live at [logos.marketmaker.cc](https://logos.marketmaker.cc), which also serves the images from Cloudflare R2 storage. The old `icons.marketmaker.cc` and `logos.listingapis.com` keep working.
 
 ## Get started
 
@@ -22,7 +22,7 @@ Sync reads the listing logo maps and skips monograms. Coin originals keep their 
 
 Every ticker with an image appears in the catalog. Full syncs refresh the [CoinMarketCap quick-search snapshot](https://s2.coinmarketcap.com/generated/search/quick_search.json) and use the best-ranked match for each ticker. If the refresh fails, sync uses `data/coinmarketcap.json`. Unranked entries sort alphabetically after ranked coins. Use `--index-only` to rebuild the catalogs offline from the listing maps and saved metadata. Combine it with `--refresh-metadata` to refresh the snapshot without downloading images.
 
-Run `bun run sync:ai` to generate the AI SVGs in `icons/ai/`, 96×96 WebP thumbnails in `icons/sm/ai/`, and the catalog in `data/ai.json` from the pinned npm packages. For an offline sync, set `AI_LOGO_TARBALL_DIR` to a directory containing `lobehub-icons-static-svg-1.104.0.tgz` and `simple-icons-16.15.0.tgz`. Run `bun --no-env-file scripts/upload-ai.ts --dry-run` to list the R2 keys and content types.
+Run `bun run sync:ai` to generate the AI SVGs in `icons/ai/`, 96×96 WebP thumbnails in `icons/sm/ai/`, and the catalog in `data/ai.json` from the pinned npm packages. For an offline sync, set `AI_LOGO_TARBALL_DIR` to a directory containing `lobehub-icons-static-svg-1.104.0.tgz` and `simple-icons-16.15.0.tgz`. Run `bun run sync:services` to build the service logos in `icons/services/` (SVG where the brand has one, otherwise PNG up to 256px), their 96px WebP thumbnails in `icons/sm/services/`, and `data/services.json`. Each entry in `scripts/sync-services.ts` lists its sources in order: a package icon, the brand's own site icon, or its official GitHub organization avatar. Run `bun --no-env-file scripts/upload-ai.ts --dry-run` to list the R2 keys and content types for the AI and service logos, then run it without `--dry-run` to upload them.
 
 ## Embed an icon
 
@@ -36,8 +36,10 @@ The files live in the Cloudflare R2 bucket `listingapis-logos`. `https://logos.m
 | Exchange thumbnail, 96px WebP | `https://logos.marketmaker.cc/exchange-logos/sm/<slug>.webp` |
 | AI original, SVG | `https://logos.marketmaker.cc/ai-logos/<slug>.svg` |
 | AI thumbnail, 96px WebP | `https://logos.marketmaker.cc/ai-logos/sm/<slug>.webp` |
+| Service original, SVG or PNG | `https://logos.marketmaker.cc/service-logos/<file>` |
+| Service thumbnail, 96px WebP | `https://logos.marketmaker.cc/service-logos/sm/<slug>.webp` |
 
-Take the exact original file name from `data/coins.json`, `data/exchanges.json`, or `data/ai.json` (or from the icon panel on the site). AI originals are always SVGs.
+Take the exact original file name from `data/coins.json`, `data/exchanges.json`, `data/ai.json`, or `data/services.json` (or from the icon panel on the site). AI originals are always SVGs.
 
 ```html
 <img src="https://logos.marketmaker.cc/coin-logos/btc.png" alt="Bitcoin" width="48" height="48">

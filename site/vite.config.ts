@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import solid from 'vite-plugin-solid';
 import { defineConfig, type Plugin } from 'vite';
-import type { AiLogo, AiRow, Coin, CoinRow, Exchange, ExchangeRow } from '../data/catalog';
+import type { AiLogo, AiRow, Coin, CoinRow, Exchange, ExchangeRow, ServiceLogo, ServiceRow } from '../data/catalog';
 import { createHandler, type Environment } from '../worker/handler';
 
 const siteDirectory = fileURLToPath(new URL('.', import.meta.url));
@@ -12,13 +12,16 @@ const dataDirectory = path.resolve(siteDirectory, '../data');
 const iconsDirectory = path.resolve(siteDirectory, '../icons');
 const cdnOrigin = 'https://logos.listingapis.com';
 
-type IndexKind = 'coins' | 'exchanges' | 'ai';
+type IndexKind = 'coins' | 'exchanges' | 'ai' | 'services';
 
 async function readIndex<T>(kind: IndexKind): Promise<T[]> {
   return JSON.parse(await readFile(path.join(dataDirectory, `${kind}.json`), 'utf8'));
 }
 
 async function compactIndex(kind: IndexKind): Promise<string> {
+  if (kind === 'services') {
+    return JSON.stringify((await readIndex<ServiceLogo>('services')).map(({ slug, name, file, sm, kind: group }): ServiceRow => [slug, name, file, sm, group]));
+  }
   if (kind === 'ai') {
     return JSON.stringify((await readIndex<AiLogo>('ai')).map(({ slug, name, file, sm, kind: group }): AiRow => [slug, name, file, sm, group]));
   }
@@ -32,7 +35,7 @@ type Next = (error?: unknown) => void;
 
 async function serveIndex(request: IncomingMessage, response: ServerResponse, next: Next) {
   const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
-  const match = /^\/index\/(coins|exchanges|ai)\.json$/.exec(pathname);
+  const match = /^\/index\/(coins|exchanges|ai|services)\.json$/.exec(pathname);
   if (!match || request.method !== 'GET') {
     next();
     return;
@@ -47,15 +50,17 @@ async function serveIndex(request: IncomingMessage, response: ServerResponse, ne
 }
 
 async function createIconMiddleware() {
-  const [coins, exchanges, ai] = await Promise.all([readIndex<Coin>('coins'), readIndex<Exchange>('exchanges'), readIndex<AiLogo>('ai')]);
-  const handle = createHandler(coins, exchanges, ai);
-  // Local Vite uses the public CDN for coins and exchanges and the local icons/ folder for AI logos.
+  const [coins, exchanges, ai, services] = await Promise.all([readIndex<Coin>('coins'), readIndex<Exchange>('exchanges'), readIndex<AiLogo>('ai'), readIndex<ServiceLogo>('services')]);
+  const handle = createHandler(coins, exchanges, ai, undefined, services);
+  // Local Vite uses the public CDN for coins and exchanges and the local icons/ folder for AI and service logos.
   // The deployed Worker reads the R2 binding.
   const env: Environment = {
     LOGOS: {
       async get(key) {
-        if (key.startsWith('ai-logos/')) {
-          const local = path.join(iconsDirectory, key.replace(/^ai-logos\/sm\//, 'sm/ai/').replace(/^ai-logos\//, 'ai/'));
+        const localGroup = /^(ai|service)-logos\/(sm\/)?/.exec(key);
+        if (localGroup) {
+          const folder = localGroup[1] === 'ai' ? 'ai' : 'services';
+          const local = path.join(iconsDirectory, localGroup[2] ? `sm/${folder}/` : `${folder}/`, key.slice(localGroup[0].length));
           if (!local.startsWith(iconsDirectory + path.sep)) return null;
           try {
             const bytes = await readFile(local);
@@ -77,7 +82,7 @@ async function createIconMiddleware() {
   };
   return async (request: IncomingMessage, response: ServerResponse, next: Next) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
-    if (!/^\/(coin|exchange|ai)(-logos)?\//.test(url.pathname)) {
+    if (!/^\/(coin|exchange|ai|service)(-logos)?\//.test(url.pathname)) {
       next();
       return;
     }
@@ -96,7 +101,7 @@ function iconData(): Plugin {
   return {
     name: 'icon-data',
     async generateBundle() {
-      for (const kind of ['coins', 'exchanges', 'ai'] as const) {
+      for (const kind of ['coins', 'exchanges', 'ai', 'services'] as const) {
         this.emitFile({ type: 'asset', fileName: `index/${kind}.json`, source: await compactIndex(kind) });
       }
     },

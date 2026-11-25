@@ -128,7 +128,7 @@ function run(command: string[], cwd: string): string {
   return result.stdout.toString()
 }
 
-async function unpackSource(source: Source, temp: string): Promise<string> {
+export async function unpackSource(source: Source, temp: string): Promise<string> {
   const { name, version } = packages[source]
   const archiveName = `${name.replace(/^@/, "").replace("/", "-")}-${version}.tgz`
   const localArchives = process.env.AI_LOGO_TARBALL_DIR

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AiLogo, Coin, Exchange } from "../data/catalog";
+import type { AiLogo, Coin, Exchange, ServiceLogo } from "../data/catalog";
 import { createHandler, type Environment, type IconCache } from "./handler";
 
 const coins: Coin[] = [
@@ -15,6 +15,9 @@ const exchanges: Exchange[] = [
 ];
 const ai: AiLogo[] = [
   { slug: "claude-code", name: "Claude Code", kind: "harness", file: "claude-code.svg", sm: "claude-code.webp" },
+];
+const services: ServiceLogo[] = [
+  { slug: "coingecko", name: "CoinGecko", kind: "data", file: "coingecko.png", sm: "coingecko.webp" },
 ];
 const claudeCodeSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h2v2z"/></svg>';
 
@@ -224,5 +227,17 @@ describe("storage paths", () => {
     const handle = createHandler(coins, exchanges, ai);
     expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/none.png"), env)).status).toBe(404);
     expect((await handle(new Request("https://logos.marketmaker.cc/coin-logos/%2E%2E/x.png"), env)).status).toBe(404);
+  });
+
+  test("serves service logos by slug and by storage path", async () => {
+    const { env } = setup({ "service-logos/coingecko.png": "full", "service-logos/sm/coingecko.webp": "small" });
+    const handle = createHandler(coins, exchanges, ai, undefined, services);
+    expect(await (await handle(new Request("https://icons.test/service/CoinGecko"), env)).text()).toBe("small");
+    expect(await (await handle(new Request("https://icons.test/service/coingecko?size=full"), env)).text()).toBe("full");
+    const stored = await handle(new Request("https://icons.test/service-logos/coingecko.png"), env);
+    expect(await stored.text()).toBe("full");
+    expect(stored.headers.get("Content-Type")).toBe("image/png");
+    const unknown = await handle(new Request("https://icons.test/service/unknown"), env);
+    expect(unknown.headers.get("x-icons-fallback")).toBe("1");
   });
 });

@@ -1,4 +1,4 @@
-import type { AiLogo, Coin, Exchange } from "../data/catalog";
+import type { AiLogo, Coin, Exchange, ServiceLogo } from "../data/catalog";
 
 interface IconObject {
   body: ReadableStream<Uint8Array>;
@@ -103,7 +103,7 @@ function setBest(map: Map<string, Coin>, key: string, candidate: Coin): void {
   if (!current || bestRank(candidate) < bestRank(current)) map.set(key, candidate);
 }
 
-export function createHandler(coins: Coin[], exchanges: Exchange[], ai: AiLogo[], cache?: IconCache) {
+export function createHandler(coins: Coin[], exchanges: Exchange[], ai: AiLogo[], cache?: IconCache, services: ServiceLogo[] = []) {
   const bySymbol = new Map<string, Coin>();
   const bySlug = new Map<string, Coin>();
   for (const coin of coins) {
@@ -112,13 +112,14 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], ai: AiLogo[]
   }
   const byExchange = new Map(exchanges.map((exchange) => [exchange.slug.toLowerCase(), exchange]));
   const byAi = new Map(ai.map((logo) => [logo.slug.toLowerCase(), logo]));
+  const byService = new Map(services.map((logo) => [logo.slug.toLowerCase(), logo]));
 
   return async function handle(request: Request, env: Environment): Promise<Response> {
     if (request.method !== "GET") return jsonError(405, "Method not allowed");
 
     const url = new URL(request.url);
     // Public storage paths are identical to the R2 keys.
-    if (/^\/(coin|exchange|ai)-logos\//.test(url.pathname)) {
+    if (/^\/(coin|exchange|ai|service)-logos\//.test(url.pathname)) {
       let objectKey: string;
       try {
         objectKey = decodeURIComponent(url.pathname.slice(1));
@@ -141,14 +142,14 @@ export function createHandler(coins: Coin[], exchanges: Exchange[], ai: AiLogo[]
       return new Response(object.body, { headers });
     }
 
-    const route = /^\/(coin|exchange|ai)\/([^/]+)$/.exec(url.pathname);
+    const route = /^\/(coin|exchange|ai|service)\/([^/]+)$/.exec(url.pathname);
     if (!route) {
       if (!env.ASSETS) return jsonError(404, "Not found");
       const asset = await env.ASSETS.fetch(request);
       return asset.status === 404 ? jsonError(404, "Not found") : withCors(asset);
     }
     const [, category, encodedKey] = route;
-    const namedLogos = category === "ai" ? byAi : byExchange;
+    const namedLogos = category === "ai" ? byAi : category === "service" ? byService : byExchange;
 
     const requestedSize = url.searchParams.get("size");
     if (requestedSize !== null && requestedSize !== "sm" && requestedSize !== "full") {

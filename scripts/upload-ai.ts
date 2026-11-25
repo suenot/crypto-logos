@@ -2,9 +2,13 @@ import { readdir } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
 const bucket = "listingapis-logos"
+const types: Record<string, string> = { ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp" }
+// AI and service logos are generated in this repository, so this script uploads them to R2.
 const groups = [
-  { directory: "icons/ai", prefix: "ai-logos", extension: ".svg", type: "image/svg+xml" },
-  { directory: "icons/sm/ai", prefix: "ai-logos/sm", extension: ".webp", type: "image/webp" },
+  { directory: "icons/ai", prefix: "ai-logos", extensions: [".svg"] },
+  { directory: "icons/sm/ai", prefix: "ai-logos/sm", extensions: [".webp"] },
+  { directory: "icons/services", prefix: "service-logos", extensions: [".svg", ".png"] },
+  { directory: "icons/sm/services", prefix: "service-logos/sm", extensions: [".webp"] },
 ]
 
 async function uploadAi(args: string[]) {
@@ -14,12 +18,12 @@ async function uploadAi(args: string[]) {
   const dryRun = args.includes("--dry-run")
   const root = resolve(import.meta.dir, "..")
   const uploads = []
-  for (const { directory, prefix, extension, type } of groups) {
+  for (const { directory, prefix, extensions } of groups) {
     const files = (await readdir(join(root, directory), { withFileTypes: true }))
-      .filter(file => file.isFile() && file.name.endsWith(extension))
+      .filter(file => file.isFile() && extensions.some(extension => file.name.endsWith(extension)))
       .map(file => file.name)
       .sort()
-    for (const file of files) uploads.push({ path: join(root, directory, file), key: `${prefix}/${file}`, type })
+    for (const file of files) uploads.push({ path: join(root, directory, file), key: `${prefix}/${file}`, type: types[file.slice(file.lastIndexOf("."))] })
   }
 
   if (dryRun) {
